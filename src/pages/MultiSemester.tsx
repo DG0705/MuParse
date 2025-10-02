@@ -6,12 +6,12 @@ import { Link } from "react-router-dom";
 const MultiSemester = () => {
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b bg-card sticky top-0 z-10">
+      <header className="border-b bg-card sticky top-0 z-10 backdrop-blur-sm bg-card/95">
         <div className="container mx-auto px-4 py-4 flex items-center gap-4">
-          <Link to="/">
+          <Link to="/home">
             <Button variant="ghost" size="sm">
               <ArrowLeft className="w-4 h-4 mr-2" />
-              Back
+              Back to Home
             </Button>
           </Link>
           <div>
@@ -20,7 +20,7 @@ const MultiSemester = () => {
           </div>
         </div>
       </header>
-      <main className="container mx-auto px-4 py-8">
+      <main className="container mx-auto px-4 py-8 animate-fade-in">
         <PdfResultConverter />
       </main>
     </div>

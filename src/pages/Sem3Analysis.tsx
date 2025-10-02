@@ -6,12 +6,12 @@ import { Link } from "react-router-dom";
 const Sem3Analysis = () => {
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b bg-card sticky top-0 z-10">
+      <header className="border-b bg-card sticky top-0 z-10 backdrop-blur-sm bg-card/95">
         <div className="container mx-auto px-4 py-4 flex items-center gap-4">
-          <Link to="/">
+          <Link to="/year4">
             <Button variant="ghost" size="sm">
               <ArrowLeft className="w-4 h-4 mr-2" />
-              Back
+              Back to Year 4
             </Button>
           </Link>
           <div>
@@ -20,7 +20,7 @@ const Sem3Analysis = () => {
           </div>
         </div>
       </header>
-      <main className="container mx-auto px-4 py-8">
+      <main className="container mx-auto px-4 py-8 animate-fade-in">
         <ResultUploaderAndViewer3 />
       </main>
     </div>

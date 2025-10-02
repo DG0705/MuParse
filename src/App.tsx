@@ -3,7 +3,12 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import Index from "./pages/Index";
+import Landing from "./pages/Landing";
+import Home from "./pages/Home";
+import Year1 from "./pages/Year1";
+import Year2 from "./pages/Year2";
+import Year3 from "./pages/Year3";
+import Year4 from "./pages/Year4";
 import Sem1Converter from "./pages/Sem1Converter";
 import Sem2Converter from "./pages/Sem2Converter";
 import Sem7Converter from "./pages/Sem7Converter";
@@ -23,7 +28,12 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Index />} />
+          <Route path="/" element={<Landing />} />
+          <Route path="/home" element={<Home />} />
+          <Route path="/year1" element={<Year1 />} />
+          <Route path="/year2" element={<Year2 />} />
+          <Route path="/year3" element={<Year3 />} />
+          <Route path="/year4" element={<Year4 />} />
           <Route path="/sem1-converter" element={<Sem1Converter />} />
           <Route path="/sem2-converter" element={<Sem2Converter />} />
           <Route path="/sem7-converter" element={<Sem7Converter />} />
