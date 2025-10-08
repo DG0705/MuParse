@@ -14,11 +14,10 @@ const Year4 = () => {
     },
     {
       title: "Semester 8 - PDF Converter",
-      description: "Convert Semester 8 result PDFs to structured CSV format (Coming Soon)",
+      description: "Convert Semester 8 result PDFs to structured CSV format",
       icon: FileText,
-      path: "#",
-      color: "from-emerald-500 to-teal-500",
-      disabled: true
+      path: "/sem8-converter",
+      color: "from-emerald-500 to-teal-500"
     },
     {
       title: "Semester 7 - Result Analysis",

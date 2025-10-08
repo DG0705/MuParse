@@ -12,6 +12,7 @@ import Year4 from "./pages/Year4";
 import Sem1Converter from "./pages/Sem1Converter";
 import Sem2Converter from "./pages/Sem2Converter";
 import Sem7Converter from "./pages/Sem7Converter";
+import Sem8Converter from "./pages/Sem8Converter";
 import Sem1Analysis from "./pages/Sem1Analysis";
 import Sem2Analysis from "./pages/Sem2Analysis";
 import Sem3Analysis from "./pages/Sem3Analysis";
@@ -37,6 +38,7 @@ const App = () => (
           <Route path="/sem1-converter" element={<Sem1Converter />} />
           <Route path="/sem2-converter" element={<Sem2Converter />} />
           <Route path="/sem7-converter" element={<Sem7Converter />} />
+          <Route path="/sem8-converter" element={<Sem8Converter />} />
           <Route path="/sem1-analysis" element={<Sem1Analysis />} />
           <Route path="/sem2-analysis" element={<Sem2Analysis />} />
           <Route path="/sem7-analysis" element={<Sem3Analysis />} />
