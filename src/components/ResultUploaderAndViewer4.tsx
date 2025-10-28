@@ -698,7 +698,8 @@ const ResultUploaderAndViewer4: React.FC = () => {
     <div className="font-serif p-8 max-w-7xl mx-auto my-5 border border-gray-300 shadow-xl bg-white rounded-lg">
       <div className="text-center mb-6 pb-4 border-b border-dashed border-gray-300">
         <h2 className="text-2xl font-bold text-gray-800 mb-3">
-          Upload Result CSV File
+                    Upload B.E. Semester VIII Result CSV
+
         </h2>
         <input
           type="file"

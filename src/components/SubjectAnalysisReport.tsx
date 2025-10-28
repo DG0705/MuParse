@@ -31,7 +31,7 @@ const SubjectAnalysisReport: React.FC<{ analysisData: AnalysisData }> = ({
     subject: subject
       .split(" ")
       .map((s) => s.substring(0, 3))
-      .join(""),
+      .join(" "),
     Appeared: stats.totalAppeared,
     Passed: stats.totalPassed,
     "40-50 Marks": stats.marks40_50,
@@ -48,7 +48,7 @@ const SubjectAnalysisReport: React.FC<{ analysisData: AnalysisData }> = ({
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       return (
-        <div className="p-2 bg-card border border-border text-xs shadow-lg">
+        <div className="p-2 bg-white border border-gray-400 text-xs shadow-lg">
           <p className="font-bold mb-1">{label}</p>
           {payload.map((p: any, index: number) => (
             <p key={index} style={{ color: p.color }}>
@@ -62,59 +62,57 @@ const SubjectAnalysisReport: React.FC<{ analysisData: AnalysisData }> = ({
   };
 
   return (
-    <div className="p-4 border border-border mt-8 bg-card">
-      <h2 className="text-xl font-bold text-center mb-4">
-        SUBJECT-WISE RESULT SUMMARY
-      </h2>
+    <div className="p-4 border border-gray-400 mt-8">
+      <h2 className="text-xl font-bold text-center mb-4">RESULT SUMMARY</h2>
 
       <div className="overflow-x-auto mx-auto mb-8">
-        <table className="min-w-full border border-border text-xs text-center">
+        <table className="min-w-full border border-black text-xs">
           <thead>
-            <tr className="bg-secondary">
-              <th rowSpan={2} className="p-2 border border-border font-bold">
+            <tr className="bg-blue-50">
+              <th rowSpan={2} className="p-2 border border-black font-bold">
                 SUBJECT
               </th>
-              <th rowSpan={2} className="p-2 border border-border font-bold">
+              <th rowSpan={2} className="p-2 border border-black font-bold">
                 NAME OF TEACHER
               </th>
-              <th rowSpan={2} className="p-2 border border-border font-bold">
-                TOTAL STUDENTS APPEARED
+              <th rowSpan={2} className="p-2 border border-black font-bold">
+                TOTAL NO OF STUDENTS APPEARED
               </th>
-              <th rowSpan={2} className="p-2 border border-border font-bold">
-                TOTAL STUDENTS PASSED
+              <th rowSpan={2} className="p-2 border border-black font-bold">
+                TOTAL NO. OF STUDENTS PASSED
               </th>
-              <th rowSpan={2} className="p-2 border border-border font-bold">
-                PASS PERCENTAGE
+              <th rowSpan={2} className="p-2 border border-black font-bold">
+                PASS PERCENTAGE IN EACH SUBJECT
               </th>
-              <th colSpan={3} className="p-2 border border-border font-bold">
-                CANDIDATES SCORING
+              <th colSpan={3} className="p-2 border border-black font-bold">
+                CANDIDATES GETTING
               </th>
             </tr>
-            <tr className="bg-secondary">
-              <th className="p-2 border border-border font-bold">40-50 MARKS</th>
-              <th className="p-2 border border-border font-bold">51-59 MARKS</th>
-              <th className="p-2 border border-border font-bold">
-                60 & ABOVE MARKS
+            <tr className="bg-blue-50">
+              <th className="p-2 border border-black font-bold">40-50 MARKS</th>
+              <th className="p-2 border border-black font-bold">51-59 MARKS</th>
+              <th className="p-2 border border-black font-bold">
+                60 & ABOVE 60 MARKS
               </th>
             </tr>
           </thead>
           <tbody>
             {Object.entries(analysisData).map(([subject, stats]) => (
-              <tr key={subject} className="even:bg-muted/50">
-                <td className="p-2 border border-border font-semibold">
+              <tr key={subject} className="even:bg-gray-50">
+                <td className="p-2 border border-black font-semibold">
                   {subject}
                 </td>
-                <td className="p-2 border border-border">{stats.teacher}</td>
-                <td className="p-2 border border-border">
+                <td className="p-2 border border-black">{stats.teacher}</td>
+                <td className="p-2 border border-black">
                   {stats.totalAppeared}
                 </td>
-                <td className="p-2 border border-border">{stats.totalPassed}</td>
-                <td className="p-2 border border-border font-bold text-green-700">
+                <td className="p-2 border border-black">{stats.totalPassed}</td>
+                <td className="p-2 border border-black font-bold text-green-700">
                   {stats.passPercentage}
                 </td>
-                <td className="p-2 border border-border">{stats.marks40_50}</td>
-                <td className="p-2 border border-border">{stats.marks51_59}</td>
-                <td className="p-2 border border-border">
+                <td className="p-2 border border-black">{stats.marks40_50}</td>
+                <td className="p-2 border border-black">{stats.marks51_59}</td>
+                <td className="p-2 border border-black">
                   {stats.marks60_Above}
                 </td>
               </tr>
@@ -124,14 +122,13 @@ const SubjectAnalysisReport: React.FC<{ analysisData: AnalysisData }> = ({
       </div>
 
       <div className="grid grid-cols-1 gap-10">
-        <div className="border border-border p-4 pt-10 h-[400px]">
-          <h4 className="text-center font-bold mb-4">
-            Result Analysis (Appeared vs. Passed)
-          </h4>
+        <div className="border border-gray-400 p-4 pt-10 h-[400px]">
+          <h4 className="text-center font-bold mb-4">Result Analysis</h4>
           <ResponsiveContainer width="100%" height="90%">
             <BarChart
               data={chartData}
               margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+              barCategoryGap="10%"
             >
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
               <XAxis dataKey="subject" />
@@ -145,40 +142,34 @@ const SubjectAnalysisReport: React.FC<{ analysisData: AnalysisData }> = ({
               />
               <Bar
                 dataKey="Passed"
-                fill="#10B981"
+                fill="#EF4444"
                 name="Total Students Passed"
               />
             </BarChart>
           </ResponsiveContainer>
         </div>
-        <div className="border border-border p-4 pt-10 h-[400px]">
+
+        <div className="border border-gray-400 p-4 pt-10 h-[400px]">
           <h4 className="text-center font-bold mb-4">
-            Subject-wise Statistical Analysis (Marks Breakdown)
+            Subjectwise Statistical Analysis
           </h4>
           <ResponsiveContainer width="100%" height="90%">
             <BarChart
               data={chartData}
               margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+              barCategoryGap="20%"
             >
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
               <XAxis dataKey="subject" />
               <YAxis domain={[0, chartDomainMax]} />
               <Tooltip content={<CustomTooltip />} />
-              <Legend />
-              <Bar
-                dataKey="40-50 Marks"
-                fill="#EAB308"
-                name="40-50 Marks"
-              />
-              <Bar
-                dataKey="51-59 Marks"
-                fill="#F97316"
-                name="51-59 Marks"
-              />
+              <Legend layout="horizontal" verticalAlign="top" align="center" />
+              <Bar dataKey="40-50 Marks" fill="#6B7280" name="40-50 MARKS" />
+              <Bar dataKey="51-59 Marks" fill="#3B82F6" name="51-59 MARKS" />
               <Bar
                 dataKey="60+ Marks"
-                fill="#22C55E"
-                name="60+ Marks"
+                fill="#F59E0B"
+                name="60 & ABOVE 60 MARKS"
               />
             </BarChart>
           </ResponsiveContainer>

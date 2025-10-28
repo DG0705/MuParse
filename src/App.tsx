@@ -3,22 +3,34 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import Landing from "./pages/Landing";
-import Home from "./pages/Home";
-import Year1 from "./pages/Year1";
-import Year2 from "./pages/Year2";
-import Year3 from "./pages/Year3";
-import Year4 from "./pages/Year4";
-import Sem1Converter from "./pages/Sem1Converter";
-import Sem2Converter from "./pages/Sem2Converter";
-import Sem7Converter from "./pages/Sem7Converter";
-import Sem8Converter from "./pages/Sem8Converter";
-import Sem1Analysis from "./pages/Sem1Analysis";
-import Sem2Analysis from "./pages/Sem2Analysis";
-import Sem3Analysis from "./pages/Sem3Analysis";
-import MultiSemester from "./pages/MultiSemester";
-import AdvancedAnalysis from "./pages/AdvancedAnalysis";
+import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
+import { StudentDashboard } from "./components/StudentDashboard";
+import Landing from "./components/Landing";
+import Home from "./components/Home";
+import Year1 from "./components/Year1";
+import Year2 from "./components/Year2";
+import Year3 from "./components/Year3";
+import Year4 from "./components/Year4";
+import Dummy from "./components/Dummy";
+import Sem7 from "./components/Sem7";
+
+import Dummy1 from "./components/Dummy1";
+import ResultUploaderAndViewer from "./components/ResultUploaderAndViewer";
+import ResultUploaderAndViewer2 from "./components/ResultUploaderAndViewer2";
+import ResultUploaderAndViewer3 from "./components/ResultUploaderAndViewer3";
+import PdfResultConverter from "./components/PdfResultConverter";
+import ResultUploaderAndViewer4 from "./components/ResultUploaderAndViewer4";
+import Sem1Converter from "./components/Sem1Converter";
+import Sem2Converter from "./components/Sem2Converter";
+import Sem7Converter from "./components/Sem7Converter";
+import Sem8Converter from "./components/Sem8Converter";
+import SimplePdfConverter from "./components/SimplePdfConverter";
+import SimplePdfConverter4 from "./components/SimplePdfConverter4";
+import SimplePdfConverter5 from "./components/SimplePdfConverter5";
+import SimplePdfConverter6 from "./components/SimplePdfConverter6";
+
+
 
 const queryClient = new QueryClient();
 
@@ -39,11 +51,25 @@ const App = () => (
           <Route path="/sem2-converter" element={<Sem2Converter />} />
           <Route path="/sem7-converter" element={<Sem7Converter />} />
           <Route path="/sem8-converter" element={<Sem8Converter />} />
-          <Route path="/sem1-analysis" element={<Sem1Analysis />} />
-          <Route path="/sem2-analysis" element={<Sem2Analysis />} />
-          <Route path="/sem7-analysis" element={<Sem3Analysis />} />
-          <Route path="/multi-semester" element={<MultiSemester />} />
-          <Route path="/advanced-analysis" element={<AdvancedAnalysis />} />
+          <Route path="/sem3-converter" element={<SimplePdfConverter title="Semester 3 - PDF to CSV Converter" description="Convert result PDFs to structured CSV format"/>} />
+          <Route path="/sem4-converter" element={<SimplePdfConverter4 title="Semester 4 - PDF to CSV Converter" description="Convert result PDFs to structured CSV format"/>} />
+          <Route path="/sem5-converter" element={<SimplePdfConverter5 title="Semester 5 - PDF to CSV Converter" description="Convert result PDFs to structured CSV format"/>} />
+          <Route path="/sem6-converter" element={<SimplePdfConverter6 title="Semester 6 - PDF to CSV Converter" description="Convert result PDFs to structured CSV format"/>} />
+
+
+          <Route path="/sem7-converter" element={<Sem7 />} />
+          <Route path="/sem8-converter" element={<PdfResultConverter/>} />
+
+
+          <Route path="/sem1-analysis" element={<ResultUploaderAndViewer />} />
+          <Route path="/sem2-analysis" element={<ResultUploaderAndViewer2 />} />
+          <Route path="/sem7-analysis" element={<ResultUploaderAndViewer3 />} />
+          <Route path="/sem8-analysis" element={<ResultUploaderAndViewer4 />} />
+
+
+
+          <Route path="/1" element={<Index />} />
+          <Route path="/Student" element={<StudentDashboard />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

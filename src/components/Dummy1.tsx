@@ -162,7 +162,7 @@ export const Dummy1: React.FC = () => {
       if (results.length > 0) {
         toast({
           title: "Success!",
-          description: `${results.length} student(s) found.`,
+          description: `${results.length+1} student(s) found.`,
         });
       } else {
         toast({
