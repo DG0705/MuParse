@@ -24,6 +24,7 @@ type Props = {
   subjectConfig: SubjectConfigItem[];
 };
 
+// Known passing marks (optional overrides)
 const PASSING_MARKS_MAP: { [key: string]: number } = {
   Eng_Maths_I_Marks: 32,
   Eng_Physics_I_Marks: 10,
@@ -38,6 +39,9 @@ const PASSING_MARKS_MAP: { [key: string]: number } = {
   Eng_Maths_I_TW_Marks: 20,
 };
 
+// Default passing mark for unknown subjects
+const DEFAULT_PASS_MARK = 40; 
+
 export function SubjectPassFailChart({ students, subjectConfig }: Props) {
   const chartData = useMemo(() => {
     if (!students.length || !subjectConfig.length) {
@@ -48,15 +52,14 @@ export function SubjectPassFailChart({ students, subjectConfig }: Props) {
       let passCount = 0;
       let failCount = 0;
 
-      const passingMark = PASSING_MARKS_MAP[subject.key];
+      // Use specific passing mark if known, otherwise default to 40
+      const passingMark = PASSING_MARKS_MAP[subject.key] ?? DEFAULT_PASS_MARK;
 
       students.forEach((student) => {
         const marks = student[subject.key];
-        if (
-          typeof marks === "number" &&
-          !isNaN(marks) &&
-          typeof passingMark === "number"
-        ) {
+        
+        // Check if marks exist and are a valid number
+        if (typeof marks === "number" && !isNaN(marks)) {
           if (marks >= passingMark) {
             passCount++;
           } else {
@@ -69,9 +72,15 @@ export function SubjectPassFailChart({ students, subjectConfig }: Props) {
         name: subject.displayName,
         Pass: passCount,
         Fail: failCount,
+        // Optional: Include passing criteria in the data for tooltip usage if needed
+        passingMark
       };
     });
   }, [students, subjectConfig]);
+
+  if (!chartData.length) {
+     return <div className="h-full flex items-center justify-center text-gray-400">No Chart Data Available</div>;
+  }
 
   return (
     <ResponsiveContainer width="100%" height="100%">
@@ -96,16 +105,20 @@ export function SubjectPassFailChart({ students, subjectConfig }: Props) {
           }}
         />
         <Tooltip
+          cursor={{ fill: 'transparent' }}
           contentStyle={{
-            backgroundColor: "rgba(255, 255, 255, 0.8)",
+            backgroundColor: "rgba(255, 255, 255, 0.9)",
             backdropFilter: "blur(5px)",
             border: "1px solid #ccc",
             borderRadius: "8px",
+            color: "#333"
           }}
+          formatter={(value: number, name: string) => [value, name]}
+          labelStyle={{ fontWeight: "bold", marginBottom: "5px" }}
         />
         <Legend />
-        <Bar dataKey="Pass" fill="#1E3A8A" />
-        <Bar dataKey="Fail" fill="#E11D48" />
+        <Bar dataKey="Pass" fill="#16a34a" radius={[4, 4, 0, 0]} />
+        <Bar dataKey="Fail" fill="#dc2626" radius={[4, 4, 0, 0]} />
       </BarChart>
     </ResponsiveContainer>
   );

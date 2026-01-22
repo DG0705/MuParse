@@ -16,11 +16,11 @@ import Dummy from "./components/Dummy";
 import Sem7 from "./components/Sem7";
 
 import Dummy1 from "./components/Dummy1";
-import ResultUploaderAndViewer from "./components/ResultUploaderAndViewer";
+import ResultUploaderAndViewer from "./components/sem-1Analysis";
 import ResultUploaderAndViewer2 from "./components/ResultUploaderAndViewer2";
 import ResultUploaderAndViewer3 from "./components/ResultUploaderAndViewer3";
 import PdfResultConverter from "./components/PdfResultConverter";
-import ResultUploaderAndViewer4 from "./components/ResultUploaderAndViewer4";
+import ResultUploaderAndViewer4 from "./components/sem-8Analysis";
 import Sem1Converter from "./components/Sem1Converter";
 import Sem2Converter from "./components/Sem2Converter";
 import Sem7Converter from "./components/Sem7Converter";
@@ -61,10 +61,16 @@ const App = () => (
           <Route path="/sem8-converter" element={<PdfResultConverter/>} />
 
 
+
+
+
+
+
           <Route path="/sem1-analysis" element={<ResultUploaderAndViewer />} />
           <Route path="/sem2-analysis" element={<ResultUploaderAndViewer2 />} />
           <Route path="/sem7-analysis" element={<ResultUploaderAndViewer3 />} />
           <Route path="/sem8-analysis" element={<ResultUploaderAndViewer4 />} />
+
 
 
 

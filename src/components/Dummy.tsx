@@ -182,41 +182,59 @@ export const Dummy: React.FC = () => {
     }
   };
 
-  const onDownloadCsv = () => {
-    if (students.length === 0) {
-      toast({
-        title: "No Data to Download",
-        description: "Please process a file first.",
-        variant: "destructive",
+const uploadToBackend = async () => {
+  // Ensure we have data to upload
+  if (students.length === 0) {
+    toast({ 
+      title: "No data", 
+      description: "Please process a PDF first.",
+      variant: "destructive" 
+    });
+    return;
+  }
+
+  // 1. Convert parsed students to CSV string (using your existing toCsv utility)
+  const csvData = toCsv(students);
+  
+  // 2. Create a File object from the CSV string
+  const blob = new Blob([csvData], { type: "text/csv" });
+  const file = new File([blob], "data.csv", { type: "text/csv" });
+
+  // 3. Prepare Form Data for the backend
+  const formData = new FormData();
+  formData.append("file", file);
+  
+  // IMPORTANT: Set this to "1" for Dummy.tsx and "2" for Dummy1.tsx
+  formData.append("semester", "1"); 
+
+  try {
+    const res = await fetch("http://localhost:5000/api/students/upload-csv", {
+      method: "POST",
+      body: formData,
+    });
+    const json = await res.json();
+    
+    if (res.ok) {
+      toast({ 
+        title: "Success", 
+        description: "Data stored in Database! You can now view analysis." 
       });
-      return;
-    }
-
-    const prnsToFilter = prnFilter
-      .split(/[\s,]+/)
-      .map((prn) => prn.trim())
-      .filter((prn) => prn.length > 0);
-
-    let studentsToExport = students;
-
-    if (prnsToFilter.length > 0) {
-      studentsToExport = students.filter((student) =>
-        prnsToFilter.includes(student.prn)
-      );
-    }
-
-    if (studentsToExport.length === 0) {
-      toast({
-        title: "No Matching Students Found",
-        description: "No students matched the PRN numbers you provided.",
-        variant: "destructive",
+    } else {
+      toast({ 
+        title: "Upload Failed", 
+        description: json.message || "Unknown error occurred", 
+        variant: "destructive" 
       });
-      return;
     }
-
-    const csv = toCsv(studentsToExport);
-    download("students-marks.csv", csv, "text/csv;charset=utf-8;");
-  };
+  } catch (err) {
+    console.error(err);
+    toast({ 
+      title: "Connection Error", 
+      description: "Is the backend server running on port 5000?", 
+      variant: "destructive" 
+    });
+  }
+}
 
   const hasData = students.length > 0;
 
@@ -259,14 +277,14 @@ export const Dummy: React.FC = () => {
           <label className="text-sm font-medium">
             3. Download Formatted Data
           </label>
-          <Button
-            variant="outline"
-            className="w-full"
-            onClick={onDownloadCsv}
-            disabled={!hasData || isLoading}
-          >
-            {isLoading ? "Processing..." : "Download CSV"}
-          </Button>
+          <Button 
+  variant="default" // Use a primary style to distinguish from download
+  className="w-full mt-2"
+  onClick={uploadToBackend}
+  disabled={!hasData || isLoading}
+>
+  Upload to Database & Analyze
+</Button>
         </div>
       </Card>
 

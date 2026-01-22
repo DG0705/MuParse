@@ -2,10 +2,10 @@ import Dummy from "@/components/Dummy";
 import Dummy1 from "@/components/Dummy1";
 import PdfResultConverter from "@/components/PdfResultConverter";
 import Sem7 from "@/components/Sem7";
-import ResultUploaderAndViewer from "@/components/ResultUploaderAndViewer";
+import ResultUploaderAndViewer from "@/components/sem-1Analysis";
 import ResultUploaderAndViewer2 from "@/components/ResultUploaderAndViewer2";
 import ResultUploaderAndViewer3 from "@/components/ResultUploaderAndViewer3";
-import ResultUploaderAndViewer4 from "@/components/ResultUploaderAndViewer4";
+import ResultUploaderAndViewer4 from "@/components/sem-8Analysis";
 
 const Index = () => {
   return (

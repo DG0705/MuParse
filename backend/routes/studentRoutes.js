@@ -1,15 +1,17 @@
 import express from 'express';
 import multer from 'multer';
-import {  uploadCsvData } from '../controllers/studentController.js';
+import { uploadCsvData, getStudents, getStudentAnalysis } from '../controllers/studentController.js';
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
-// Production: Used by React (JSON)
-// router.post('/upload', uploadStudentData);
-// yes sir
-
-// Testing/Admin: Used by Postman (CSV File)
+// Upload CSV (Generated from PDF on Frontend)
 router.post('/upload-csv', upload.single('file'), uploadCsvData);
+
+// Get Raw Data
+router.get('/', getStudents);
+
+// Get Analysis (New Endpoint)
+router.get('/analysis', getStudentAnalysis);
 
 export default router;

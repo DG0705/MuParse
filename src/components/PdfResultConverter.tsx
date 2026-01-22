@@ -1,6 +1,8 @@
 import React, { useState, useMemo } from "react";
 import * as pdfjs from "pdfjs-dist";
 
+// Remove interface definitions if this is a .js file, 
+// otherwise keep them for TypeScript (.tsx)
 interface StudentData {
   Seat_No: string;
   Name: string;
@@ -289,6 +291,11 @@ const PdfResultConverter: React.FC = () => {
   const [prnFilter, setPrnFilter] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
 
+  // --- NEW STATE ---
+  const [semester, setSemester] = useState("");
+  const [isUploading, setIsUploading] = useState(false);
+  // ----------------
+
   useMemo(() => {
     pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.mjs`;
   }, []);
@@ -379,6 +386,64 @@ const PdfResultConverter: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
+  // --- NEW UPLOAD FUNCTION ---
+  const handleUploadToDatabase = async () => {
+    if (!semester) {
+      alert("Please enter a Semester number before uploading.");
+      return;
+    }
+
+    const prnsToFilter = prnFilter
+      .split(/[\s,]+/)
+      .map((prn) => prn.trim())
+      .filter((prn) => prn.length > 0);
+
+    let studentsToExport = allStudents;
+
+    if (prnsToFilter.length > 0) {
+      studentsToExport = allStudents.filter((student) =>
+        prnsToFilter.includes(student.PRN)
+      );
+    }
+
+    if (studentsToExport.length === 0) {
+      alert("No student data available to upload.");
+      return;
+    }
+
+    const csvContent = generateCsvContent(studentsToExport);
+    const blob = new Blob([csvContent], { type: "text/csv" });
+    const file = new File([blob], "converted_result.csv", { type: "text/csv" });
+
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("semester", semester);
+
+    setIsUploading(true);
+
+    try {
+      // Ensure this URL matches your backend configuration
+      const response = await fetch("http://localhost:5000/api/students/upload-csv", {
+        method: "POST",
+        body: formData,
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        alert(`Success! ${result.message}`);
+      } else {
+        alert(`Upload Failed: ${result.message || result.error}`);
+      }
+    } catch (error) {
+      console.error("Error uploading data:", error);
+      alert("Network error. Please ensure the backend server is running.");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+  // ---------------------------
+
   const hasData = allStudents.length > 0;
 
   return (
@@ -424,6 +489,37 @@ const PdfResultConverter: React.FC = () => {
                 })`}
           </button>
         </div>
+
+        {/* --- NEW UPLOAD SECTION --- */}
+        <div className="space-y-2 pt-4 border-t border-gray-200">
+          <label className="text-sm font-medium">4. Upload to Database</label>
+          <div className="flex gap-4">
+            <input
+              type="number"
+              placeholder="Semester (e.g. 1)"
+              value={semester}
+              onChange={(e) => setSemester(e.target.value)}
+              className="p-2 border rounded-md w-32 text-sm"
+              min="1"
+              max="8"
+            />
+            <button
+              onClick={handleUploadToDatabase}
+              disabled={!hasData || isProcessing || isUploading}
+              className={`flex-1 text-white font-bold py-2 px-4 rounded-lg transition-colors ${
+                isUploading
+                  ? "bg-gray-400 cursor-not-allowed"
+                  : "bg-green-600 hover:bg-green-700"
+              }`}
+            >
+              {isUploading ? "Uploading..." : "Upload CSV to DB"}
+            </button>
+          </div>
+          <p className="text-xs text-gray-500">
+            * Converts extracted data to CSV and saves to MongoDB.
+          </p>
+        </div>
+        {/* ------------------------- */}
       </div>
 
       <div className="grid md:grid-cols-2 gap-6">
