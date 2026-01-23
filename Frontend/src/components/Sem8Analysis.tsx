@@ -74,7 +74,7 @@ const SubjectAnalysisReport: React.FC<{ analysisData: AnalysisData }> = ({
 
   const maxBarValue = Math.max(
     ...Object.values(analysisData).map((s) => s.totalAppeared),
-    1
+    1,
   );
   const chartDomainMax = Math.ceil(maxBarValue / 10) * 10;
 
@@ -217,13 +217,13 @@ const getReportHeader = (title: string) => {
 // --- Download Hook ---
 const useDownloadReport = (
   overallSummaryRef: React.RefObject<HTMLDivElement>,
-  subjectAnalysisRef: React.RefObject<HTMLDivElement>
+  subjectAnalysisRef: React.RefObject<HTMLDivElement>,
 ) => {
   const [isDownloading, setIsDownloading] = useState(false);
 
   const getFullHtmlContent = (
     contentRef: React.RefObject<HTMLDivElement>,
-    title: string
+    title: string,
   ) => {
     const content = contentRef.current;
     if (!content) return null;
@@ -244,8 +244,10 @@ const useDownloadReport = (
         row.querySelectorAll("th, td").forEach((cell) => {
           const th = document.createElement("th");
           th.innerText = cell.textContent || "";
-          if (cell.hasAttribute("rowspan")) th.setAttribute("rowspan", cell.getAttribute("rowspan")!);
-          if (cell.hasAttribute("colspan")) th.setAttribute("colspan", cell.getAttribute("colspan")!);
+          if (cell.hasAttribute("rowspan"))
+            th.setAttribute("rowspan", cell.getAttribute("rowspan")!);
+          if (cell.hasAttribute("colspan"))
+            th.setAttribute("colspan", cell.getAttribute("colspan")!);
           th.style.border = "1px solid black";
           th.style.padding = "4px 8px";
           th.style.backgroundColor = "#f0f4ff";
@@ -306,11 +308,11 @@ const useDownloadReport = (
 
       const analysisContentNode = getFullHtmlContent(
         subjectAnalysisRef,
-        "RESULT ANALYSIS B.E. SEM VIII (Subjectwise Report)"
+        "RESULT ANALYSIS B.E. SEM VIII (Subjectwise Report)",
       );
       if (analysisContentNode) {
         analysisContentNode.childNodes.forEach((node) =>
-          combinedContent.appendChild(node.cloneNode(true))
+          combinedContent.appendChild(node.cloneNode(true)),
         );
       }
 
@@ -321,11 +323,11 @@ const useDownloadReport = (
 
       const summaryContentNode = getFullHtmlContent(
         overallSummaryRef,
-        "RESULT ANALYSIS B.E. SEM VIII (Summary & Toppers)"
+        "RESULT ANALYSIS B.E. SEM VIII (Summary & Toppers)",
       );
       if (summaryContentNode) {
         summaryContentNode.childNodes.forEach((node) =>
-          combinedContent.appendChild(node.cloneNode(true))
+          combinedContent.appendChild(node.cloneNode(true)),
         );
       }
 
@@ -333,9 +335,13 @@ const useDownloadReport = (
       document.body.appendChild(analysisHtml);
       await new Promise((resolve) => setTimeout(resolve, 100));
 
-      const analysisCanvas = await html2canvas(analysisHtml, html2canvasOptions);
+      const analysisCanvas = await html2canvas(
+        analysisHtml,
+        html2canvasOptions,
+      );
       const analysisImgData = analysisCanvas.toDataURL("image/jpeg", 1.0);
-      const imgHeight = (analysisCanvas.height * pdfWidth) / analysisCanvas.width;
+      const imgHeight =
+        (analysisCanvas.height * pdfWidth) / analysisCanvas.width;
       pdf.addImage(analysisImgData, "JPEG", 0, 0, pdfWidth, imgHeight);
       pdf.save("Result_Analysis_Combined_Tall_Report.pdf");
     } catch (error) {
@@ -365,11 +371,11 @@ const useDownloadReport = (
 
       const page1Html = getFullHtmlContent(
         subjectAnalysisRef,
-        "RESULT ANALYSIS B.E. SEM VIII (Subjectwise Report)"
+        "RESULT ANALYSIS B.E. SEM VIII (Subjectwise Report)",
       );
       if (page1Html)
         page1Html.childNodes.forEach((node) =>
-          combinedContainer?.appendChild(node.cloneNode(true))
+          combinedContainer?.appendChild(node.cloneNode(true)),
         );
 
       const separator = document.createElement("div");
@@ -379,11 +385,11 @@ const useDownloadReport = (
 
       const page2Html = getFullHtmlContent(
         overallSummaryRef,
-        "RESULT ANALYSIS B.E. SEM VIII (Summary & Toppers)"
+        "RESULT ANALYSIS B.E. SEM VIII (Summary & Toppers)",
       );
       if (page2Html)
         page2Html.childNodes.forEach((node) =>
-          combinedContainer?.appendChild(node.cloneNode(true))
+          combinedContainer?.appendChild(node.cloneNode(true)),
         );
 
       document.body.appendChild(combinedContainer);
@@ -411,9 +417,11 @@ const useDownloadReport = (
 };
 
 // --- Main Component ---
-const ResultUploaderAndViewer4: React.FC = () => {
+const Sem8Analysis: React.FC = () => {
   const [parsedData, setParsedData] = useState<StudentData[]>([]);
-  const [subjectMapping, setSubjectMapping] = useState<{ [key: string]: string }>({});
+  const [subjectMapping, setSubjectMapping] = useState<{
+    [key: string]: string;
+  }>({});
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -422,7 +430,7 @@ const ResultUploaderAndViewer4: React.FC = () => {
 
   const { downloadPdf, downloadPng, isDownloading } = useDownloadReport(
     overallSummaryRef,
-    subjectAnalysisRef
+    subjectAnalysisRef,
   );
 
   // --- NEW: Fetch Data from Backend (Semester 8) ---
@@ -431,49 +439,54 @@ const ResultUploaderAndViewer4: React.FC = () => {
       try {
         setLoading(true);
         // Change semester to 8
-        const res = await fetch("http://localhost:5000/api/students?semester=8");
-        
+        const res = await fetch(
+          "http://localhost:5000/api/students?semester=8",
+        );
+
         if (!res.ok) throw new Error("Failed to fetch data from server");
-        
+
         const json = await res.json();
-        
+
         if (Array.isArray(json) && json.length > 0) {
-            // 1. Map Backend Data to Frontend Format
-            const mappedData: StudentData[] = json.map((s: any) => ({
-                ...s.subjects, // Spread raw subject columns
-                Seat_No: s.seatNo,
-                Name: s.name,
-                Result: s.results.finalResult,
-                SGPI: s.results.sgpi,
-                Gender: s.subjects?.Gender || "Unknown",
-                Remark: s.subjects?.Remark || "",
-                // Default finalStatus (will be recalculated in useMemo)
-                finalStatus: s.results.finalResult === "F" ? "Failed" : "Passed" 
-            }));
+          // 1. Map Backend Data to Frontend Format
+          const mappedData: StudentData[] = json.map((s: any) => ({
+            ...s.subjects, // Spread raw subject columns
+            Seat_No: s.seatNo,
+            Name: s.name,
+            Result: s.results.finalResult,
+            SGPI: s.results.sgpi,
+            Gender: s.subjects?.Gender || "Unknown",
+            Remark: s.subjects?.Remark || "",
+            // Default finalStatus (will be recalculated in useMemo)
+            finalStatus: s.results.finalResult === "F" ? "Failed" : "Passed",
+          }));
 
-            // 2. Dynamically Determine Subject Mapping
-            // We look at the first student record to find columns ending in "_Total"
-            const firstRecord = mappedData[0];
-            const headers = Object.keys(firstRecord);
-            const dynamicSubjectMapping: { [key: string]: string } = {};
-            
-            headers.forEach((header) => {
-              if (header.endsWith("_Total") && header !== "Grand_Total") {
-                const subjectName = header.replace(/_/g, " ").replace(" Total", "");
-                dynamicSubjectMapping[header] = subjectName;
-              }
-            });
+          // 2. Dynamically Determine Subject Mapping
+          // We look at the first student record to find columns ending in "_Total"
+          const firstRecord = mappedData[0];
+          const headers = Object.keys(firstRecord);
+          const dynamicSubjectMapping: { [key: string]: string } = {};
 
-            setSubjectMapping(dynamicSubjectMapping);
-            setParsedData(mappedData);
+          headers.forEach((header) => {
+            if (header.endsWith("_Total") && header !== "Grand_Total") {
+              const subjectName = header
+                .replace(/_/g, " ")
+                .replace(" Total", "");
+              dynamicSubjectMapping[header] = subjectName;
+            }
+          });
+
+          setSubjectMapping(dynamicSubjectMapping);
+          setParsedData(mappedData);
         } else {
-            // No data found
-            setParsedData([]); 
+          // No data found
+          setParsedData([]);
         }
-
       } catch (err: any) {
         console.error(err);
-        setError("Could not load data. Ensure the backend is running and data is uploaded.");
+        setError(
+          "Could not load data. Ensure the backend is running and data is uploaded.",
+        );
       } finally {
         setLoading(false);
       }
@@ -545,15 +558,15 @@ const ResultUploaderAndViewer4: React.FC = () => {
     }));
 
     const successfulStudents = processedData.filter(
-      (s) => s.isStatisticallySuccessful
+      (s) => s.isStatisticallySuccessful,
     );
     const maleStudents = processedData.filter((s) => s.Gender === "Male");
     const femaleStudents = processedData.filter((s) => s.Gender === "Female");
     const malePassed = maleStudents.filter(
-      (s) => s.isStatisticallySuccessful
+      (s) => s.isStatisticallySuccessful,
     ).length;
     const femalePassed = femaleStudents.filter(
-      (s) => s.isStatisticallySuccessful
+      (s) => s.isStatisticallySuccessful,
     ).length;
 
     const overallToppers = [...successfulStudents]
@@ -567,11 +580,11 @@ const ResultUploaderAndViewer4: React.FC = () => {
     subjectKeys.forEach((markKey) => {
       const subjectName = subjectMapping[markKey];
       const studentsWithMarks = processedData.filter(
-        (s) => s[markKey] && !isNaN(cleanAndParseInt(s[markKey]))
+        (s) => s[markKey] && !isNaN(cleanAndParseInt(s[markKey])),
       );
       const totalAppeared = studentsWithMarks.length;
       const totalPassed = studentsWithMarks.filter(
-        (s) => cleanAndParseInt(s[markKey]) >= 40
+        (s) => cleanAndParseInt(s[markKey]) >= 40,
       ).length;
 
       subjectAnalysis[subjectName] = {
@@ -590,14 +603,14 @@ const ResultUploaderAndViewer4: React.FC = () => {
           return m >= 51 && m <= 59;
         }).length,
         marks60_Above: studentsWithMarks.filter(
-          (s) => cleanAndParseInt(s[markKey]) >= 60
+          (s) => cleanAndParseInt(s[markKey]) >= 60,
         ).length,
         teacher: teacherAssignment[subjectName] || "N/A",
       };
 
       if (studentsWithMarks.length > 0) {
         const sortedStudents = [...studentsWithMarks].sort(
-          (a, b) => cleanAndParseInt(b[markKey]) - cleanAndParseInt(a[markKey])
+          (a, b) => cleanAndParseInt(b[markKey]) - cleanAndParseInt(a[markKey]),
         );
 
         let toppersList: TopperEntry[] = [];
@@ -656,14 +669,20 @@ const ResultUploaderAndViewer4: React.FC = () => {
         <h2 className="text-2xl font-bold text-gray-800 mb-3">
           B.E. Semester VIII Result Analysis (Database)
         </h2>
-        
-        {loading && <p className="text-blue-600 font-semibold animate-pulse">Loading data from database...</p>}
+
+        {loading && (
+          <p className="text-blue-600 font-semibold animate-pulse">
+            Loading data from database...
+          </p>
+        )}
         {error && <p className="text-red-600 font-bold">❌ {error}</p>}
         {!loading && parsedData.length === 0 && !error && (
-            <div className="bg-yellow-50 border border-yellow-200 p-4 rounded text-yellow-800">
-                <p>No records found in the database for Semester 8.</p>
-                <p className="text-sm mt-1">Please upload the PDF/Data first via the uploader.</p>
-            </div>
+          <div className="bg-yellow-50 border border-yellow-200 p-4 rounded text-yellow-800">
+            <p>No records found in the database for Semester 8.</p>
+            <p className="text-sm mt-1">
+              Please upload the PDF/Data first via the uploader.
+            </p>
+          </div>
         )}
       </div>
 
@@ -821,7 +840,7 @@ const ResultUploaderAndViewer4: React.FC = () => {
                     ([subject, toppers]) => {
                       const rank1Mark = toppers[0]?.marks;
                       const rank2MarkEntry = toppers.find(
-                        (s) => s.marks < rank1Mark
+                        (s) => s.marks < rank1Mark,
                       );
                       const rank2Mark = rank2MarkEntry?.marks;
 
@@ -894,7 +913,7 @@ const ResultUploaderAndViewer4: React.FC = () => {
                           </table>
                         </div>
                       );
-                    }
+                    },
                   )}
                 </div>
               </section>
@@ -954,4 +973,4 @@ const ResultUploaderAndViewer4: React.FC = () => {
   );
 };
 
-export default ResultUploaderAndViewer4;
+export default Sem8Analysis;

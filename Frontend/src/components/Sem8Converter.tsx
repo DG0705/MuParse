@@ -1,11 +1,7 @@
-import { Dummy } from "@/components/Dummy";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { Link } from "react-router-dom";
-import Dummy1 from "./Dummy1";
-import Sem7 from "./Sem7Converter1";
 import PdfResultConverter from "./PdfResultConverter";
-
 
 const Sem1Converter = () => {
   return (
@@ -19,8 +15,12 @@ const Sem1Converter = () => {
             </Button>
           </Link>
           <div>
-            <h1 className="text-2xl font-bold">Semester 8 - PDF to CSV Converter</h1>
-            <p className="text-sm text-muted-foreground">Convert result PDFs to structured CSV format</p>
+            <h1 className="text-2xl font-bold">
+              Semester 8 - PDF to CSV Converter
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              Convert result PDFs to structured CSV format
+            </p>
           </div>
         </div>
       </header>

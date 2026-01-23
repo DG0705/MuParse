@@ -17,9 +17,8 @@ import {
   parseStudentsFromTxt,
   toCsv,
   StudentRecord,
-  SUBJECT_NAMES,
-  ALL_PAPERS_CONFIG,
-} from "@/utils/sem7";
+  SUBJECT_NAMES_SEM2 as SUBJECT_NAMES,
+} from "@/utils/dummy1";
 
 const download = (filename: string, content: string, mimeType: string) => {
   const blob = new Blob([content], { type: mimeType });
@@ -33,7 +32,7 @@ const download = (filename: string, content: string, mimeType: string) => {
 
 const cleaningRules = {
   "University of Mumbai, Mumbai":
-    "FEC101 -Engineering Mathematics -I Term Work:",
+    "FEC201 TW-Engineering Mathematics-II Term Work:",
   "SEAT NAME OF THE CANDIDATE": "|CR GR GP C*G",
   "CENTRE-COLLEGE": "|CR GR GP C*G",
   "/ - FEMALE, # - 0.229A": "GRADE POINT :",
@@ -86,7 +85,7 @@ function cleanExtractedText(
   return finalLines.join("\n");
 }
 
-export const Sem7Converter1: React.FC = () => {
+export const Dummy1: React.FC = () => {
   const { toast } = useToast();
   const [rawText, setRawText] = useState("");
   const [cleanedText, setCleanedText] = useState("");
@@ -100,6 +99,7 @@ export const Sem7Converter1: React.FC = () => {
 
   const handleFile = async (file?: File | null) => {
     if (!file) return;
+
     if (file.type !== "application/pdf") {
       toast({
         title: "Invalid File Type",
@@ -115,6 +115,7 @@ export const Sem7Converter1: React.FC = () => {
     setStudents([]);
     try {
       let extractedText = "";
+
       toast({ title: "Step 1: Extracting Text from PDF..." });
       const arrayBuffer = await file.arrayBuffer();
       const pdf = await pdfjs.getDocument(arrayBuffer).promise;
@@ -161,7 +162,7 @@ export const Sem7Converter1: React.FC = () => {
       if (results.length > 0) {
         toast({
           title: "Success!",
-          description: `${results.length} student(s) found.`,
+          description: `${results.length+1} student(s) found.`,
         });
       } else {
         toast({
@@ -215,7 +216,7 @@ export const Sem7Converter1: React.FC = () => {
     }
 
     const csv = toCsv(studentsToExport);
-    download("students-marks.csv", csv, "text/csv;charset=utf-8;");
+    download("sem2-students-marks.csv", csv, "text/csv;charset=utf-8;");
   };
 
   const hasData = students.length > 0;
@@ -230,7 +231,9 @@ export const Sem7Converter1: React.FC = () => {
       <Card className="p-6 space-y-6">
         <div className="flex flex-col md:flex-row gap-4 items-start">
           <div className="space-y-2 flex-1">
-            <label className="text-sm font-medium">1. Upload .pdf File</label>
+            <label className="text-sm font-medium">
+              1. Upload Sem 2 PDF File
+            </label>
             <Input
               type="file"
               accept=".pdf"
@@ -313,14 +316,11 @@ export const Sem7Converter1: React.FC = () => {
                     <TableCell className="min-w-[200px]">{s.name}</TableCell>
                     <TableCell>{s.result}</TableCell>
                     <TableCell>{s.sgpi ?? ""}</TableCell>
-                    {Array.from(
-                      { length: ALL_PAPERS_CONFIG.length },
-                      (_, i) => (
-                        <TableCell key={`m-${i}`}>
-                          {s.papers[i]?.marks ?? ""}
-                        </TableCell>
-                      )
-                    )}
+                    {Array.from({ length: 13 }, (_, i) => (
+                      <TableCell key={`m-${i}`}>
+                        {s.papers[i]?.marks ?? ""}
+                      </TableCell>
+                    ))}
                   </TableRow>
                 ))
               ) : (
@@ -341,4 +341,4 @@ export const Sem7Converter1: React.FC = () => {
   );
 };
 
-export default Sem7Converter1;
+export default Dummy1;
