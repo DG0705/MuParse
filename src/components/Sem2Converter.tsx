@@ -4,7 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { Link } from "react-router-dom";
 import Dummy1 from "./Dummy1";
 
-const Sem1Converter = () => {
+const Sem2Converter = () => {
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b bg-card sticky top-0 z-10 backdrop-blur-sm bg-card/95">
@@ -28,4 +28,4 @@ const Sem1Converter = () => {
   );
 };
 
-export default Sem1Converter;
+export default Sem2Converter;

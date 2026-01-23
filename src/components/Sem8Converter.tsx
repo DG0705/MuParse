@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { Link } from "react-router-dom";
 import Dummy1 from "./Dummy1";
-import Sem7 from "./Sem7";
+import Sem7 from "./Sem7Converter1";
 import PdfResultConverter from "./PdfResultConverter";
 
 

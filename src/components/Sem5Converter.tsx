@@ -169,7 +169,7 @@ interface SimplePdfConverterProps {
   description: string;
 }
 
-export const SimplePdfConverter: React.FC<SimplePdfConverterProps> = ({
+export const Sem5Converter: React.FC<SimplePdfConverterProps> = ({
   title,
   description,
 }) => {
@@ -486,4 +486,4 @@ export const SimplePdfConverter: React.FC<SimplePdfConverterProps> = ({
   );
 };
 
-export default SimplePdfConverter;
+export default Sem5Converter;

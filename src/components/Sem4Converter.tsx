@@ -11,16 +11,16 @@ import SubjectAnalysisReport from "./SubjectAnalysisReport";
 
 // --- 1. Define Data Structures and Subject Rules ---
 const SUBJECT_RULES: { name: string; components: string[]; shortName: string }[] = [
-    { name: "ENGINEERING MATHEMATICS - III", components: ["ESE", "IA", "TOT", "TW"], shortName: "ENGG MATHS - III" },
-    { name: "DATA STRUCTURE AND ANALYSIS", components: ["ESE", "IA", "TOT"], shortName: "DSA" },
-    { name: "DATABASE MANAGEMENT SYSTEM", components: ["ESE", "IA", "TOT"], shortName: "DBMS" },
-    { name: "PRINCIPLE OF COMMUNICATION", components: ["ESE", "IA", "TOT"], shortName: "POC" },
-    { name: "PARADIGMS AND COMPUTER PROGRAMMING FUNDAMENTALS", components: ["ESE", "IA", "TOT"], shortName: "PARADIGMS & CPF" },
-    { name: "DATA STRUCTURE LAB", components: ["PR OR", "TW", "TOT"], shortName: "DATA STRUCTURE LAB" },
-    { name: "SQL LAB", components: ["PR OR", "TW", "TOT"], shortName: "SQL LAB" },
-    { name: "COMPUTER PROGRAMMING PARADIGMS LAB", components: ["PR OR", "TW", "TOT"], shortName: "COMP PROG PARADIGMS LAB" },
-    { name: "JAVA LAB (SBL)", components: ["PR OR", "TW", "TOT"], shortName: "JAVA LAB (SBL)" },
-    { name: "MINI PROJECT - 1A FOR FRONT END / BACKEND APPLICATION USING JAVA", components: ["PR OR", "TW", "TOT"], shortName: "MINI PROJECT - 1A" },
+    { name: "ENGINEERING MATHEMATICS - IV", components: ["ESE", "IA", "TOT", "TW"], shortName: "ENGG MATHS - IV" },
+    { name: "COMPUTER NETWORK AND NETWORK DESIGN", components: ["ESE", "IA", "TOT"], shortName: "CNND" },
+    { name: "OPERATING SYSTEM", components: ["ESE", "IA", "TOT"], shortName: "OS" },
+    { name: "AUTOMATA THEORY", components: ["ESE", "IA", "TOT"], shortName: "AT" },
+    { name: "COMPUTER ORGANIZATION AND ARCHITECTURE", components: ["ESE", "IA", "TOT"], shortName: "COA" },
+    { name: "NETWORK LAB", components: ["PR OR", "TW", "TOT"], shortName: "NETWORK LAB" },
+    { name: "UNIX LAB", components: ["PR OR", "TW", "TOT"], shortName: "UNIX LAB" },
+    { name: "MICROPROCESSOR LAB", components: ["PR OR", "TW", "TOT"], shortName: "MICROPROCESSOR LAB" },
+    { name: "PYTHON LAB (SBL)", components: ["PR OR", "TW", "TOT"], shortName: "PYTHON LAB (SBL)" },
+    { name: "MINI PROJECT - 1 B FOR PYTHON BASED AUTOMATION PROJECTS ", components: ["PR OR", "TW", "TOT"], shortName: "MINI PROJECT 1B" },
 ];
 
 const EXPECTED_COMPONENT_COUNT = 31;
@@ -168,7 +168,7 @@ interface SimplePdfConverterProps {
   description: string;
 }
 
-export const SimplePdfConverter: React.FC<SimplePdfConverterProps> = ({
+export const Sem4Converter: React.FC<SimplePdfConverterProps> = ({
   title,
   description,
 }) => {
@@ -485,4 +485,4 @@ export const SimplePdfConverter: React.FC<SimplePdfConverterProps> = ({
   );
 };
 
-export default SimplePdfConverter;
+export default Sem4Converter;

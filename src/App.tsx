@@ -13,7 +13,7 @@ import Year2 from "./components/Year2";
 import Year3 from "./components/Year3";
 import Year4 from "./components/Year4";
 import Dummy from "./components/Dummy";
-import Sem7 from "./components/Sem7";
+import Sem7, { Sem7Converter1 } from "./components/Sem7Converter1";
 
 import Dummy1 from "./components/Dummy1";
 import ResultUploaderAndViewer from "./components/sem-1Analysis";
@@ -25,10 +25,10 @@ import Sem1Converter from "./components/Sem1Converter";
 import Sem2Converter from "./components/Sem2Converter";
 import Sem7Converter from "./components/Sem7Converter";
 import Sem8Converter from "./components/Sem8Converter";
-import SimplePdfConverter from "./components/SimplePdfConverter";
-import SimplePdfConverter4 from "./components/SimplePdfConverter4";
-import SimplePdfConverter5 from "./components/SimplePdfConverter5";
-import SimplePdfConverter6 from "./components/SimplePdfConverter6";
+import SimplePdfConverter, { Sem3Converter } from "./components/Sem3Converter";
+import SimplePdfConverter4, { Sem4Converter } from "./components/Sem4Converter";
+import SimplePdfConverter5, { Sem5Converter } from "./components/Sem5Converter";
+import SimplePdfConverter6, { Sem6Converter } from "./components/Sem6Converter";
 
 
 
@@ -51,13 +51,14 @@ const App = () => (
           <Route path="/sem2-converter" element={<Sem2Converter />} />
           <Route path="/sem7-converter" element={<Sem7Converter />} />
           <Route path="/sem8-converter" element={<Sem8Converter />} />
-          <Route path="/sem3-converter" element={<SimplePdfConverter title="Semester 3 - PDF to CSV Converter" description="Convert result PDFs to structured CSV format"/>} />
-          <Route path="/sem4-converter" element={<SimplePdfConverter4 title="Semester 4 - PDF to CSV Converter" description="Convert result PDFs to structured CSV format"/>} />
-          <Route path="/sem5-converter" element={<SimplePdfConverter5 title="Semester 5 - PDF to CSV Converter" description="Convert result PDFs to structured CSV format"/>} />
-          <Route path="/sem6-converter" element={<SimplePdfConverter6 title="Semester 6 - PDF to CSV Converter" description="Convert result PDFs to structured CSV format"/>} />
+          <Route path="/sem3-converter" element={<Sem3Converter title="Semester 3 - PDF to CSV Converter" description="Convert result PDFs to structured CSV format"/>} />
+          <Route path="/sem4-converter" element={<Sem4Converter title="Semester 4 - PDF to CSV Converter" description="Convert result PDFs to structured CSV format"/>} />
+          <Route path="/sem5-converter" element={<Sem5Converter title="Semester 5 - PDF to CSV Converter" description="Convert result PDFs to structured CSV format"/>} />
+          <Route path="/sem6-converter" element={<Sem6Converter title="Semester 6 - PDF to CSV Converter" description="Convert result PDFs to structured CSV format"/>} />
 
 
-          <Route path="/sem7-converter" element={<Sem7 />} />
+
+          <Route path="/sem7-converter" element={<Sem7Converter1 />} />
           <Route path="/sem8-converter" element={<PdfResultConverter/>} />
 
 
