@@ -1,6 +1,6 @@
 import express from 'express';
 import multer from 'multer';
-import { uploadCsvData, getStudents, getStudentAnalysis } from '../controllers/studentController.js';
+import { uploadCsvData, getStudents } from '../controllers/studentController.js';
 
 
 
@@ -16,6 +16,6 @@ router.post('/upload-csv', upload.single('file'), uploadCsvData);
 router.get('/', getStudents);
 
 // Get Analysis (New Endpoint)
-router.get('/analysis', getStudentAnalysis);
+// router.get('/analysis', getStudentAnalysis);
 
 export default router;

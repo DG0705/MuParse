@@ -4,7 +4,7 @@ const semester3Schema = new mongoose.Schema({
   seatNo: { type: String, required: true, unique: true },
   name: { type: String, required: true },
   // Optional: Frontend doesn't currently extract PRN for these sems, so strictly not required yet
-  prn: { type: String, default: null }, 
+  prn: { type: String }, 
   semester: { type: Number, default: 3 },
   results: {
     sgpi: { type: String, default: "0" }, // Maps to 'SGPA' from your CSV

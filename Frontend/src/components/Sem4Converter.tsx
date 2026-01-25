@@ -487,7 +487,7 @@ const uploadToBackend = async () => {
     formData.append("file", file);
     
     // ⚠️ IMPORTANT: CHANGE THIS NUMBER FOR EACH FILE (3, 4, 5, or 6)
-    formData.append("semester", "3"); 
+    formData.append("semester", "4"); 
 
     setIsLoading(true);
     try {

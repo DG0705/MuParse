@@ -11,6 +11,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
+import { useToast } from "@/hooks/use-toast"; // Ensure this is imported
 
 // --- Interfaces ---
 export interface StudentData {
@@ -218,6 +219,7 @@ const getReportHeader = (title: string) => {
 const useDownloadReport = (
   overallSummaryRef: React.RefObject<HTMLDivElement>,
   subjectAnalysisRef: React.RefObject<HTMLDivElement>,
+  toast: any // Accepting toast function
 ) => {
   const [isDownloading, setIsDownloading] = useState(false);
 
@@ -344,9 +346,21 @@ const useDownloadReport = (
         (analysisCanvas.height * pdfWidth) / analysisCanvas.width;
       pdf.addImage(analysisImgData, "JPEG", 0, 0, pdfWidth, imgHeight);
       pdf.save("Result_Analysis_Combined_Tall_Report.pdf");
+      
+      // Success Toast
+      toast({
+        title: "Success",
+        description: "PDF Report generated successfully!",
+      });
+
     } catch (error) {
       console.error("Critical error during PDF generation:", error);
-      alert("PDF Generation Failed! Please try downloading as PNG.");
+      // REPLACED ALERT WITH TOAST
+      toast({
+        title: "PDF Generation Failed",
+        description: "Could not generate PDF. Please try downloading as PNG.",
+        variant: "destructive",
+      });
     } finally {
       if (analysisHtml && document.body.contains(analysisHtml)) {
         document.body.removeChild(analysisHtml);
@@ -402,9 +416,21 @@ const useDownloadReport = (
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+
+      // Success Toast
+      toast({
+        title: "Success",
+        description: "Image captured successfully!",
+      });
+
     } catch (error) {
       console.error(`Error during PNG generation:`, error);
-      alert(`Failed to generate PNG. Check console for details.`);
+      // REPLACED ALERT WITH TOAST
+      toast({
+        title: "PNG Generation Failed",
+        description: "Failed to generate PNG. Check console for details.",
+        variant: "destructive",
+      });
     } finally {
       if (combinedContainer && document.body.contains(combinedContainer)) {
         document.body.removeChild(combinedContainer);
@@ -418,6 +444,7 @@ const useDownloadReport = (
 
 // --- Main Component ---
 const Sem8Analysis: React.FC = () => {
+  const { toast } = useToast(); // Initialize toast
   const [parsedData, setParsedData] = useState<StudentData[]>([]);
   const [subjectMapping, setSubjectMapping] = useState<{
     [key: string]: string;
@@ -428,9 +455,11 @@ const Sem8Analysis: React.FC = () => {
   const subjectAnalysisRef = useRef<HTMLDivElement>(null);
   const overallSummaryRef = useRef<HTMLDivElement>(null);
 
+  // Pass toast to the custom hook
   const { downloadPdf, downloadPng, isDownloading } = useDownloadReport(
     overallSummaryRef,
     subjectAnalysisRef,
+    toast
   );
 
   // --- NEW: Fetch Data from Backend (Semester 8) ---
