@@ -20,12 +20,6 @@ import {
   SUBJECT_NAMES_SEM2 as SUBJECT_NAMES,
 } from "@/utils/dummy1";
 
-
-
-
-
-
-
 const download = (filename: string, content: string, mimeType: string) => {
   const blob = new Blob([content], { type: mimeType });
   const url = URL.createObjectURL(blob);
@@ -199,14 +193,12 @@ export const Dummy1: React.FC = () => {
       return;
     }
 
-    // Convert parsed students to CSV string
     const csvData = toCsv(students);
     const blob = new Blob([csvData], { type: "text/csv" });
     const file = new File([blob], "data.csv", { type: "text/csv" });
 
     const formData = new FormData();
     formData.append("file", file);
-    // SET SEMESTER TO 2
     formData.append("semester", "2"); 
 
     setIsLoading(true);

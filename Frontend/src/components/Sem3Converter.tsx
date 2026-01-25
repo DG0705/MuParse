@@ -4,12 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { FileSpreadsheet, Upload, BarChart3 } from "lucide-react";
-
-// Import the analysis component for rendering the report
+import { FileSpreadsheet, Upload, BarChart3, Database } from "lucide-react";
 import SubjectAnalysisReport from "./SubjectAnalysisReport";
-
-
 
 // --- 1. Define Data Structures and Subject Rules ---
 const SUBJECT_RULES: { name: string; components: string[]; shortName: string }[] = [
@@ -27,7 +23,7 @@ const SUBJECT_RULES: { name: string; components: string[]; shortName: string }[]
 
 const EXPECTED_COMPONENT_COUNT = 31;
 
-// --- Helper Data Structures for Analysis (from SubjectAnalysisReport.tsx) ---
+// --- Helper Data Structures for Analysis ---
 interface SubjectStats {
   totalAppeared: number;
   totalPassed: number;
@@ -42,16 +38,24 @@ interface AnalysisData {
   [subjectName: string]: SubjectStats;
 }
 
-// Generate the column headers and the crucial TOT Mark indices
+// --- Headers Generation ---
 const MARK_HEADERS: string[] = [];
 const GRADE_HEADERS: string[] = [];
 const TOT_INDICES: { subjectName: string; markIndex: number; gradeIndex: number }[] = [];
 let currentIndex = 0;
 
 SUBJECT_RULES.forEach(sub => {
-    sub.components.forEach((comp, compIndex) => {
-        const fullMarkHeader = `${sub.shortName} - ${comp} (Marks)`;
-        const fullGradeHeader = `${sub.shortName} - ${comp} (Grade)`;
+    sub.components.forEach((comp) => {
+        // Sanitize headers for Database Compatibility
+        const safeShortName = sub.shortName
+            .replace(/\./g, "")       
+            .replace(/\s+/g, "_")     
+            .replace(/-/g, "_")       
+            .replace(/&/g, "and")     
+            .replace(/_+/g, "_");     
+        
+        const fullMarkHeader = `${safeShortName}_${comp}_Marks`;
+        const fullGradeHeader = `${safeShortName}_${comp}_Grade`;
         
         MARK_HEADERS.push(fullMarkHeader);
         GRADE_HEADERS.push(fullGradeHeader);
@@ -59,8 +63,8 @@ SUBJECT_RULES.forEach(sub => {
         if (comp === 'TOT') {
             TOT_INDICES.push({
                 subjectName: sub.name,
-                markIndex: currentIndex, // Index in the 31-mark array
-                gradeIndex: currentIndex, // Index in the 31-grade array
+                markIndex: currentIndex, 
+                gradeIndex: currentIndex, 
             });
         }
         currentIndex++;
@@ -85,8 +89,6 @@ interface RawStudentRecord {
     'Final Result': string;
     [key: string]: string;
 }
-// --- END: Define Data Structures and Subject Rules ---
-
 
 const download = (filename: string, content: string, mimeType: string) => {
   const blob = new Blob([content], { type: mimeType });
@@ -97,7 +99,6 @@ const download = (filename: string, content: string, mimeType: string) => {
   a.click();
   URL.revokeObjectURL(url);
 };
-
 
 // --- 2. Result Analysis Function ---
 const analyzeStudentRecords = (records: RawStudentRecord[]): AnalysisData => {
@@ -120,26 +121,21 @@ const analyzeStudentRecords = (records: RawStudentRecord[]): AnalysisData => {
             const subjectStats = initialStats[item.subjectName];
             if (!subjectStats) return;
 
-            // 1. Total Appeared
+            // Only count if the subject exists in the record
+            const markHeader = MARK_HEADERS[item.markIndex];
+            if(record[markHeader] === undefined) return;
+
             subjectStats.totalAppeared++;
             
-            // Get the TOT mark and grade for the subject
-            const markHeader = MARK_HEADERS[item.markIndex];
             const gradeHeader = GRADE_HEADERS[item.gradeIndex];
-            
-            const totMarkStr = record[markHeader];
-            const totGrade = record[gradeHeader];
+            const totMarkStr = record[markHeader] || "0";
+            const totGrade = record[gradeHeader] || "F";
 
             const totMarkNum = parseInt(totMarkStr.replace(/\+/g, '').trim(), 10);
-            
-            // Check for pass: TOT mark must be a valid number (i.e., not 'F', '!', etc.) 
-            // AND the TOT grade must NOT be 'F'
             const isPassed = !isNaN(totMarkNum) && totGrade !== 'F';
 
             if (isPassed) {
                 subjectStats.totalPassed++;
-
-                // 2. Marks Categories
                 if (totMarkNum >= 60) {
                     subjectStats.marks60_Above++;
                 } else if (totMarkNum >= 51 && totMarkNum <= 59) {
@@ -151,7 +147,6 @@ const analyzeStudentRecords = (records: RawStudentRecord[]): AnalysisData => {
         });
     });
 
-    // Finalize Pass Percentage
     Object.keys(initialStats).forEach(subjectName => {
         const stats = initialStats[subjectName];
         if (stats.totalAppeared > 0) {
@@ -162,48 +157,37 @@ const analyzeStudentRecords = (records: RawStudentRecord[]): AnalysisData => {
 
     return initialStats;
 };
-// --- END: Result Analysis Function ---
-
 
 interface SimplePdfConverterProps {
   title: string;
   description: string;
 }
 
-export const Sem3Converter: React.FC<SimplePdfConverterProps> = ({
-  title,
-  description,
-}) => {
+export const Sem3Converter: React.FC<SimplePdfConverterProps> = ({ title, description }) => {
   const { toast } = useToast();
   const [extractedText, setExtractedText] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [analysisData, setAnalysisData] = useState<AnalysisData | null>(null);
   const [studentRecords, setStudentRecords] = useState<RawStudentRecord[]>([]);
 
-
   useMemo(() => {
-    // Setting workerSrc for pdf.js is crucial for client-side processing
     pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.mjs`;
   }, []);
 
   const handleFile = async (file?: File | null) => {
     if (!file) return;
     if (file.type !== "application/pdf") {
-      toast({
-        title: "Invalid File Type",
-        description: "Please upload a PDF file.",
-        variant: "destructive",
-      });
+      toast({ title: "Invalid File Type", description: "Please upload a PDF.", variant: "destructive" });
       return;
     }
 
     setIsLoading(true);
     setExtractedText("");
-    setAnalysisData(null); // Clear previous analysis
-    setStudentRecords([]); // Clear previous records
+    setAnalysisData(null);
+    setStudentRecords([]);
 
     try {
-      toast({ title: "Extracting data from PDF..." });
+      toast({ title: "Processing PDF", description: "Extracting text..." });
       const arrayBuffer = await file.arrayBuffer();
       const pdf = await pdfjs.getDocument(arrayBuffer).promise;
       
@@ -211,13 +195,10 @@ export const Sem3Converter: React.FC<SimplePdfConverterProps> = ({
       for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
         const textContent = await page.getTextContent();
-        const textItems = textContent.items.filter(
-          (item) => "str" in item
-        ) as any[];
+        const textItems = textContent.items.filter((item) => "str" in item) as any[];
         
         textItems.sort((a, b) => {
-          if (Math.abs(a.transform[5] - b.transform[5]) > 5)
-            return b.transform[5] - a.transform[5];
+          if (Math.abs(a.transform[5] - b.transform[5]) > 5) return b.transform[5] - a.transform[5];
           return a.transform[4] - b.transform[4];
         });
         
@@ -229,9 +210,7 @@ export const Sem3Converter: React.FC<SimplePdfConverterProps> = ({
               pageText += "\n";
             } else {
               const lastItemEndX = lastItem.transform[4] + lastItem.width;
-              if (item.transform[4] > lastItemEndX + 1) {
-                pageText += "\t";
-              }
+              if (item.transform[4] > lastItemEndX + 1) pageText += "\t";
             }
           }
           pageText += item.str;
@@ -242,40 +221,25 @@ export const Sem3Converter: React.FC<SimplePdfConverterProps> = ({
 
       setExtractedText(fullText);
       
-      // *** New: Process and Analyze Data ***
+      // Parse Logic
       const { records } = parseTextToStructuredData(fullText);
-      const analysis = analyzeStudentRecords(records);
       setStudentRecords(records);
-      setAnalysisData(analysis);
-      // **********************************
       
-      toast({
-        title: "Success!",
-        description: `PDF data extracted and ${records.length} records analyzed.`,
-      });
-      
+      // --- LOGIC CHANGE: DO NOT SET ANALYSIS DATA HERE ---
+      // We only show the preview. Analysis happens after DB upload.
+      toast({ title: "PDF Parsed", description: "Preview loaded. Click 'Upload to Database' to analyze." });
+
     } catch (error) {
-      console.error("Failed to process PDF:", error);
-      toast({
-        title: "Error",
-        description: "Could not read or process the PDF file.",
-        variant: "destructive",
-      });
+      console.error(error);
+      toast({ title: "Error", description: "Could not process PDF.", variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
   };
 
-  /**
-   * REPLACED: Implements the specific regex-based parsing logic for the result sheet format.
-   * Extracts Seat No, 31 Marks, Total Mark, 31 Grades, Name, SGPA, and Final Result.
-   */
   const parseTextToStructuredData = (text: string): { headers: string[]; rows: string[][]; records: RawStudentRecord[] } => {
     const records: RawStudentRecord[] = [];
-    
-    // Regex to capture one complete student block:
     const studentBlockRegex = /(\d{5})\s*MarksO\s*([\s\S]*?)\s*Grade\s*([\s\S]*?)(?=\d{5}\s*MarksO|\Z)/g;
-    
     const cleanedText = text.replace(/\r/g, '').replace(/\n\s{1,}\n/g, '\n\n'); 
 
     let match;
@@ -284,25 +248,18 @@ export const Sem3Converter: React.FC<SimplePdfConverterProps> = ({
         const marksBlock = match[2];
         const gradeAndMetadataBlock = match[3];
 
-        // 1. Extract Marks Tokens (31 subject marks + 1 total mark = 32 tokens expected)
         const marksTokens = marksBlock.match(/[\d+\-EF\*\!]+|[\d]+/g) || [];
-        
         const subjectMarks = marksTokens.slice(0, EXPECTED_COMPONENT_COUNT);
         const totalMarks = marksTokens.length > EXPECTED_COMPONENT_COUNT ? marksTokens[EXPECTED_COMPONENT_COUNT] : 'N/A';
         
-        // 2. Extract Grade Tokens (31 tokens expected)
         const gradeTokens = gradeAndMetadataBlock.match(/[A-Z\-]+/g) || [];
         const subjectGrades = gradeTokens.slice(0, EXPECTED_COMPONENT_COUNT);
         
-        // 3. Extract Name, SGPA, and Final Result
         let name = 'N/A';
         let sgpa = 'N/A';
         let finalResult = 'N/A';
         
-        // --- Corrected Name Extraction ---
         let nameStart = 0;
-        
-        // Find the index right after the 31st grade token to find the start of the name block
         if (subjectGrades.length === EXPECTED_COMPONENT_COUNT) {
              const gradesMatch = gradeAndMetadataBlock.matchAll(/[A-Z\-]+/g);
              let i = 0;
@@ -320,207 +277,113 @@ export const Sem3Converter: React.FC<SimplePdfConverterProps> = ({
         }
         
         const nameAndMetadataBlock = gradeAndMetadataBlock.substring(nameStart);
-
-        // Name is everything up to the first occurrence of "C" (credits line).
         const nameSplit = nameAndMetadataBlock.split(/\n\s*C\s*[\d\-]+/); 
         let nameText = nameSplit[0] || 'N/A';
 
-        name = nameText.trim()
-            .replace(/\r/g, '')
-            .replace(/\n/g, ' ') 
-            .replace(/^\/\s*/, '') 
-            .replace(/\s+/g, ' '); 
-        // --- End Corrected Name Extraction ---
+        name = nameText.trim().replace(/\r/g, '').replace(/\n/g, ' ').replace(/^\/\s*/, '').replace(/\s+/g, ' '); 
 
-        // The SGPA and Result are typically in the last line (GP*C line)
         const sgpaResultBlock = nameAndMetadataBlock; 
-        
         const sgpaResultMatch = sgpaResultBlock.match(/[\d\.-]+\s+([PF])\s*$/);
         
         if (sgpaResultMatch) {
             const finalResultLetter = sgpaResultMatch[1];
             const sgpaMatch = sgpaResultBlock.match(/([\d\.-]+)\s+([PF])\s*$/);
-            if (sgpaMatch && sgpaMatch.length > 1) {
-                sgpa = sgpaMatch[1];
-            } else {
-                sgpa = 'N/A';
-            }
+            if (sgpaMatch && sgpaMatch.length > 1) sgpa = sgpaMatch[1];
             finalResult = finalResultLetter;
         } else if (sgpaResultBlock.includes('- -   F')) {
              sgpa = '- -';
              finalResult = 'F';
         }
 
+        const record: RawStudentRecord = { 'Seat No': seatNo, 'Name': name, 'Total Marks': totalMarks, 'SGPA': sgpa, 'Final Result': finalResult };
+        subjectMarks.forEach((mark, index) => { record[MARK_HEADERS[index]] = mark; });
+        subjectGrades.forEach((grade, index) => { record[GRADE_HEADERS[index]] = grade; });
 
-        // 4. Construct the Final Record object
-        const record: RawStudentRecord = {
-            'Seat No': seatNo,
-            'Name': name,
-            'Total Marks': totalMarks,
-            'SGPA': sgpa,
-            'Final Result': finalResult,
-        };
-
-        // Populate Marks
-        subjectMarks.forEach((mark, index) => {
-            record[MARK_HEADERS[index]] = mark;
-        });
-
-        // Populate Grades
-        subjectGrades.forEach((grade, index) => {
-            record[GRADE_HEADERS[index]] = grade;
-        });
-
-        if (subjectMarks.length === EXPECTED_COMPONENT_COUNT && subjectGrades.length === EXPECTED_COMPONENT_COUNT) {
-             records.push(record);
-        }
+        if (subjectMarks.length === EXPECTED_COMPONENT_COUNT && subjectGrades.length === EXPECTED_COMPONENT_COUNT) records.push(record);
     }
     
-    // 5. Convert array of objects to array of arrays (rows) for CSV output
-    const rows = records.map(record => {
-        return FINAL_HEADERS.map(header => record[header] || 'N/A');
-    });
-
+    const rows = records.map(record => FINAL_HEADERS.map(header => record[header] || 'N/A'));
     return { headers: FINAL_HEADERS, rows, records };
   };
 
   const onDownloadCsv = () => {
-    if (!extractedText) {
-      toast({
-        title: "No Data",
-        description: "Please upload a PDF file first.",
-        variant: "destructive",
-      });
-      return;
-    }
-
+    if (!extractedText) return;
     const { headers, rows } = parseTextToStructuredData(extractedText);
+    if (rows.length === 0) return;
 
-    if (rows.length === 0) {
-      toast({
-        title: "No Data",
-        description: "Could not extract structured data from PDF.",
-        variant: "destructive",
-      });
-      return;
-    }
+    const escapeCell = (cell: string) => cell.includes(",") || cell.includes('"') || cell.includes("\n") ? `"${cell.replace(/"/g, '""')}"` : cell;
+    const csvLines = [headers.map(escapeCell).join(","), ...rows.map(row => row.map(escapeCell).join(","))];
 
-    // Escape and format cell for CSV
-    const escapeCell = (cell: string) => {
-      if (cell.includes(",") || cell.includes('"') || cell.includes("\n")) {
-        return `"${cell.replace(/"/g, '""')}"`;
-      }
-      return cell;
-    };
-
-    // Generate CSV with headers and data rows
-    const csvLines = [
-      headers.map(escapeCell).join(","),
-      ...rows.map(row => row.map(escapeCell).join(","))
-    ];
-
-    const csv = csvLines.join("\n");
-
-    download("converted-result-sheet.csv", csv, "text/csv;charset=utf-8;");
-    toast({
-      title: "Downloaded!",
-      description: `CSV file with ${headers.length} columns and ${rows.length} student records downloaded.`,
-    });
+    download("converted-result-sheet.csv", csvLines.join("\n"), "text/csv;charset=utf-8;");
+    toast({ title: "Downloaded!", description: "CSV downloaded." });
   };
 
-  const hasData = extractedText.length > 0;
-
-
-
-
-
-
-
-const uploadToBackend = async () => {
+  // --- UPLOAD & FETCH ANALYZE FUNCTION ---
+  const uploadToBackend = async () => {
     if (!extractedText) {
-      toast({
-        title: "No Data",
-        description: "Please upload a PDF file first.",
-        variant: "destructive",
-      });
+      toast({ title: "No Data", description: "Please upload a PDF first.", variant: "destructive" });
       return;
     }
 
-    // 1. Generate CSV Data (Same logic as Download)
     const { headers, rows } = parseTextToStructuredData(extractedText);
-
     if (rows.length === 0) {
-      toast({
-        title: "No Data",
-        description: "Could not extract structured data from PDF.",
-        variant: "destructive",
-      });
+      toast({ title: "No Data", description: "No records to upload.", variant: "destructive" });
       return;
     }
 
-    const escapeCell = (cell: string) => {
-      if (cell.includes(",") || cell.includes('"') || cell.includes("\n")) {
-        return `"${cell.replace(/"/g, '""')}"`;
-      }
-      return cell;
-    };
-
-    const csvLines = [
-      headers.map(escapeCell).join(","),
-      ...rows.map(row => row.map(escapeCell).join(","))
-    ];
+    const escapeCell = (cell: string) => cell.includes(",") || cell.includes('"') || cell.includes("\n") ? `"${cell.replace(/"/g, '""')}"` : cell;
+    const csvLines = [headers.map(escapeCell).join(","), ...rows.map(row => row.map(escapeCell).join(","))];
     const csv = csvLines.join("\n");
 
-    // 2. Create File for Upload
     const blob = new Blob([csv], { type: "text/csv" });
     const file = new File([blob], "data.csv", { type: "text/csv" });
-
     const formData = new FormData();
     formData.append("file", file);
-    
-    // ⚠️ IMPORTANT: CHANGE THIS NUMBER FOR EACH FILE (3, 4, 5, or 6)
     formData.append("semester", "3"); 
 
     setIsLoading(true);
     try {
-      const res = await fetch("http://localhost:5000/api/students/upload-csv", {
-        method: "POST",
-        body: formData,
-      });
+      // 1. Upload to Database
+      toast({ title: "Uploading...", description: "Sending data to database." });
+      const res = await fetch("http://localhost:5000/api/students/upload-csv", { method: "POST", body: formData });
       const json = await res.json();
       
-      if (res.ok) {
-        toast({ 
-          title: "Success", 
-          description: "Data stored in Database! You can now view analysis." 
-        });
-      } else {
-        toast({ 
-          title: "Upload Failed", 
-          description: json.message || "Unknown error occurred", 
-          variant: "destructive" 
-        });
+      if (!res.ok) {
+        throw new Error(json.message || "Upload failed");
       }
-    } catch (err) {
+
+      toast({ title: "Success", description: "Data uploaded. Fetching for analysis..." });
+
+      // 2. Fetch from Database to Ensure Integrity
+      const fetchRes = await fetch("http://localhost:5000/api/students?semester=3");
+      if (!fetchRes.ok) throw new Error("Failed to fetch data from DB");
+      
+      const dbStudents = await fetchRes.json(); // Array of SemesterResult objects
+
+      if (dbStudents.length === 0) {
+        toast({ title: "Warning", description: "Database is empty for Semester 3." });
+        setIsLoading(false);
+        return;
+      }
+
+      // 3. Map DB Data back to Analysis Format
+      // The DB stores the CSV row object in the 'subjects' field
+      const recordsFromDB = dbStudents.map((s: any) => s.subjects);
+      
+      const analysis = analyzeStudentRecords(recordsFromDB);
+      setAnalysisData(analysis);
+      
+      toast({ title: "Analysis Ready", description: "Charts generated from verified Database data." });
+
+    } catch (err: any) {
       console.error(err);
-      toast({ 
-        title: "Connection Error", 
-        description: "Is the backend server running on port 5000?", 
-        variant: "destructive" 
-      });
+      toast({ title: "Error", description: err.message || "Connection Error", variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
   };
 
-
-
-
-
-
-
-
-
+  const hasData = extractedText.length > 0;
 
   return (
     <div className="w-full space-y-6">
@@ -529,75 +392,25 @@ const uploadToBackend = async () => {
           <h2 className="text-xl font-semibold">{title}</h2>
           <p className="text-sm text-muted-foreground">{description}</p>
         </div>
-
         <div className="space-y-4">
           <div className="space-y-2">
-            <label className="text-sm font-medium flex items-center gap-2">
-              <Upload className="w-4 h-4" />
-              Upload PDF File
-            </label>
-            <Input
-              type="file"
-              accept=".pdf"
-              onChange={(e) => handleFile(e.target.files?.[0] || null)}
-              disabled={isLoading}
-              onClick={(e) => (e.currentTarget.value = "")}
-            />
+            <label className="text-sm font-medium flex items-center gap-2"><Upload className="w-4 h-4" /> Upload PDF File</label>
+            <Input type="file" accept=".pdf" onChange={(e) => handleFile(e.target.files?.[0] || null)} disabled={isLoading} onClick={(e) => (e.currentTarget.value = "")} />
           </div>
-
-          {/* <Button
-            variant="default"
-            className="w-full"
-            onClick={onDownloadCsv}
-            disabled={!hasData || isLoading}
-          >
-            <FileSpreadsheet className="w-4 h-4 mr-2" />
-            {isLoading ? "Processing..." : "Download CSV"}
-          </Button> */}
-        </div> 
-
-        <Button
-            variant="default"
-            className="w-full"
-            onClick={onDownloadCsv}
-            disabled={!hasData || isLoading}
-          >
-            <FileSpreadsheet className="w-4 h-4 mr-2" />
-            {isLoading ? "Processing..." : "Download CSV"}
+          <Button variant="default" className="w-full" onClick={onDownloadCsv} disabled={!hasData || isLoading}>
+            <FileSpreadsheet className="w-4 h-4 mr-2" /> {isLoading ? "Processing..." : "Download CSV"}
           </Button>
-
-          {/* --- ADD THIS NEW BUTTON HERE --- */}
-          <Button
-            variant="secondary" // Different style to distinguish it
-            className="w-full mt-2"
-            onClick={uploadToBackend}
-            disabled={!hasData || isLoading}
-          >
-            <BarChart3 className="w-4 h-4 mr-2" />
-            Upload to Database & Analyze
+          <Button variant="secondary" className="w-full mt-2" onClick={uploadToBackend} disabled={!hasData || isLoading}>
+            <Database className="w-4 h-4 mr-2" /> Upload to Database & Analyze
           </Button>
-
-
-
-
-
-
-        {hasData && (
-          <div className="pt-4 border-t">
-            <p className="text-sm text-muted-foreground">
-              {studentRecords.length} student records extracted.
-            </p>
-          </div>
-        )}
+        </div>
+        {hasData && (<div className="pt-4 border-t"><p className="text-sm text-muted-foreground">{studentRecords.length} student records ready to process.</p></div>)}
       </Card>
       
-      {/* 3. Conditional Rendering of Analysis Report */}
+      {/* 4. Only Show Analysis if analysisData is set (after DB fetch) */}
       {analysisData && Object.keys(analysisData).length > 0 && (
         <Card className="p-6 space-y-4">
-            <div className="flex items-center gap-2">
-                <BarChart3 className="w-5 h-5" />
-                <h3 className="text-lg font-semibold">Semester 3 Result Analysis</h3>
-            </div>
+            <div className="flex items-center gap-2"><BarChart3 className="w-5 h-5" /><h3 className="text-lg font-semibold">Result Analysis (From Database)</h3></div>
             <SubjectAnalysisReport analysisData={analysisData} />
         </Card>
       )}

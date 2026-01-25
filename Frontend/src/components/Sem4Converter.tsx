@@ -48,8 +48,20 @@ let currentIndex = 0;
 
 SUBJECT_RULES.forEach(sub => {
     sub.components.forEach((comp, compIndex) => {
+
+        const safeShortName = sub.shortName
+            .replace(/\./g, "")       
+            .replace(/\s+/g, "_")     
+            .replace(/-/g, "_")       
+            .replace(/&/g, "and")     
+            .replace(/_+/g, "_");     
+        
+
+
         const fullMarkHeader = `${sub.shortName} - ${comp} (Marks)`;
         const fullGradeHeader = `${sub.shortName} - ${comp} (Grade)`;
+
+
         
         MARK_HEADERS.push(fullMarkHeader);
         GRADE_HEADERS.push(fullGradeHeader);

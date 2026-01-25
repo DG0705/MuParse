@@ -21,7 +21,7 @@ export type StudentRecord = {
   finalGrade: string | null;
 };
 
-// --- Subject Name Constants (ACTION REQUIRED: Update these with actual Sem 2 names) ---
+// --- Subject Name Constants ---
 export const SUBJECT_NAMES_SEM2 = [
   "Engineering Mathematics-II",
   "Engineering Mathematics-II Term Work",
@@ -38,21 +38,23 @@ export const SUBJECT_NAMES_SEM2 = [
   "Basic Workshop practice-II (TW)"
 ];
 
+// !!! FIXED: Replaced dots (.) and spaces with underscores (_) !!!
 const CSV_SUBJECT_HEADERS_SEM2 = [
-  "Eng. Maths-II",
-  "Eng. Maths-II TW",
-  "Eng. Physics-II",
-  "Eng. Physics-II TW",
-  "Eng. Chem-II",
-  "Eng. Chem-II TW",
-  "Eng. Graphics",
-  "Eng. Graphics TW/Orl",
-  "C Prog",
-  "C Prog TW/Orl",
-  "PCE-I",
-  "PCE-I TW",
-  "Workshop-II TW"
+  "Eng_Maths_II",
+  "Eng_Maths_II_TW",
+  "Eng_Physics_II",
+  "Eng_Physics_II_TW",
+  "Eng_Chem_II",
+  "Eng_Chem_II_TW",
+  "Eng_Graphics",
+  "Eng_Graphics_TW_Orl",
+  "C_Prog",
+  "C_Prog_TW_Orl",
+  "PCE_I",
+  "PCE_I_TW",
+  "Workshop_II_TW"
 ];
+
 const fixNumberToken = (token: string) => token.replace(/\s+/g, "");
 
 const parseGroup = (segment: string) => {

@@ -51,19 +51,19 @@ export interface SummaryData {
 }
 
 const subjectMapping: { [key: string]: string } = {
-  "Eng. Maths-II_Marks": "Eng. Maths II",
-  "Eng. Physics-II_Marks": "Eng. Physics II",
-  "Eng. Chem-II_Marks": "Eng. Chem II",
-  "Eng. Graphics_Marks": "Eng. Graphics",
+  "Eng_Maths-II_Marks": "Eng. Maths II",
+  "Eng_Physics-II_Marks": "Eng. Physics II",
+  "Eng_Chem-II_Marks": "Eng. Chem II",
+  "Eng_Graphics_Marks": "Eng. Graphics",
   "C Prog_Marks": "C Programming",
 };
 const subjectKeys = Object.keys(subjectMapping);
 
 const teacherAssignment: { [key: string]: string } = {
-  "Eng. Maths II": "Prof. P. K. Iyer",
-  "Eng. Physics II": "Dr. S. M. Joshi",
-  "Eng. Chem II": "Prof. N. R. Reddy",
-  "Eng. Graphics": "Dr. V. S. Mehta",
+  "Eng_Maths II": "Prof. P. K. Iyer",
+  "Eng_Physics II": "Dr. S. M. Joshi",
+  "Eng_Chem II": "Prof. N. R. Reddy",
+  "Eng_Graphics": "Dr. V. S. Mehta",
   "C Programming": "Prof. R. G. Gupta",
 };
 
