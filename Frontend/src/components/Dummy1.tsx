@@ -20,6 +20,12 @@ import {
   SUBJECT_NAMES_SEM2 as SUBJECT_NAMES,
 } from "@/utils/dummy1";
 
+
+
+
+
+
+
 const download = (filename: string, content: string, mimeType: string) => {
   const blob = new Blob([content], { type: mimeType });
   const url = URL.createObjectURL(blob);
@@ -162,7 +168,7 @@ export const Dummy1: React.FC = () => {
       if (results.length > 0) {
         toast({
           title: "Success!",
-          description: `${results.length+1} student(s) found.`,
+          description: `${results.length} student(s) found.`,
         });
       } else {
         toast({
@@ -182,6 +188,58 @@ export const Dummy1: React.FC = () => {
       setIsLoading(false);
     }
   };
+
+  const uploadToBackend = async () => {
+    if (students.length === 0) {
+      toast({ 
+        title: "No data", 
+        description: "Please process a PDF first.",
+        variant: "destructive" 
+      });
+      return;
+    }
+
+    // Convert parsed students to CSV string
+    const csvData = toCsv(students);
+    const blob = new Blob([csvData], { type: "text/csv" });
+    const file = new File([blob], "data.csv", { type: "text/csv" });
+
+    const formData = new FormData();
+    formData.append("file", file);
+    // SET SEMESTER TO 2
+    formData.append("semester", "2"); 
+
+    setIsLoading(true);
+    try {
+      const res = await fetch("http://localhost:5000/api/students/upload-csv", {
+        method: "POST",
+        body: formData,
+      });
+      const json = await res.json();
+      
+      if (res.ok) {
+        toast({ 
+          title: "Success", 
+          description: "Data stored in Database! You can now view analysis." 
+        });
+      } else {
+        toast({ 
+          title: "Upload Failed", 
+          description: json.message || "Unknown error occurred", 
+          variant: "destructive" 
+        });
+      }
+    } catch (err) {
+      console.error(err);
+      toast({ 
+        title: "Connection Error", 
+        description: "Is the backend server running on port 5000?", 
+        variant: "destructive" 
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }
 
   const onDownloadCsv = () => {
     if (students.length === 0) {
@@ -260,16 +318,26 @@ export const Dummy1: React.FC = () => {
 
         <div className="space-y-2">
           <label className="text-sm font-medium">
-            3. Download Formatted Data
+            3. Actions
           </label>
-          <Button
-            variant="outline"
-            className="w-full"
-            onClick={onDownloadCsv}
-            disabled={!hasData || isLoading}
-          >
-            {isLoading ? "Processing..." : "Download CSV"}
-          </Button>
+          <div className="flex flex-col gap-2">
+            <Button
+                variant="outline"
+                className="w-full"
+                onClick={onDownloadCsv}
+                disabled={!hasData || isLoading}
+            >
+                {isLoading ? "Processing..." : "Download CSV"}
+            </Button>
+            <Button 
+                variant="default"
+                className="w-full"
+                onClick={uploadToBackend}
+                disabled={!hasData || isLoading}
+            >
+                Upload to Database & Analyze
+            </Button>
+          </div>
         </div>
       </Card>
 

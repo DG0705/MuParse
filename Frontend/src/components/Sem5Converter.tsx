@@ -429,6 +429,93 @@ export const Sem5Converter: React.FC<SimplePdfConverterProps> = ({
 
   const hasData = extractedText.length > 0;
 
+
+
+
+const uploadToBackend = async () => {
+    if (!extractedText) {
+      toast({
+        title: "No Data",
+        description: "Please upload a PDF file first.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // 1. Generate CSV Data (Same logic as Download)
+    const { headers, rows } = parseTextToStructuredData(extractedText);
+
+    if (rows.length === 0) {
+      toast({
+        title: "No Data",
+        description: "Could not extract structured data from PDF.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const escapeCell = (cell: string) => {
+      if (cell.includes(",") || cell.includes('"') || cell.includes("\n")) {
+        return `"${cell.replace(/"/g, '""')}"`;
+      }
+      return cell;
+    };
+
+    const csvLines = [
+      headers.map(escapeCell).join(","),
+      ...rows.map(row => row.map(escapeCell).join(","))
+    ];
+    const csv = csvLines.join("\n");
+
+    // 2. Create File for Upload
+    const blob = new Blob([csv], { type: "text/csv" });
+    const file = new File([blob], "data.csv", { type: "text/csv" });
+
+    const formData = new FormData();
+    formData.append("file", file);
+    
+    // ⚠️ IMPORTANT: CHANGE THIS NUMBER FOR EACH FILE (3, 4, 5, or 6)
+    formData.append("semester", "3"); 
+
+    setIsLoading(true);
+    try {
+      const res = await fetch("http://localhost:5000/api/students/upload-csv", {
+        method: "POST",
+        body: formData,
+      });
+      const json = await res.json();
+      
+      if (res.ok) {
+        toast({ 
+          title: "Success", 
+          description: "Data stored in Database! You can now view analysis." 
+        });
+      } else {
+        toast({ 
+          title: "Upload Failed", 
+          description: json.message || "Unknown error occurred", 
+          variant: "destructive" 
+        });
+      }
+    } catch (err) {
+      console.error(err);
+      toast({ 
+        title: "Connection Error", 
+        description: "Is the backend server running on port 5000?", 
+        variant: "destructive" 
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+
+
+
+
+
+
+
   return (
     <div className="w-full space-y-6">
       <Card className="p-6 space-y-6">
@@ -452,7 +539,19 @@ export const Sem5Converter: React.FC<SimplePdfConverterProps> = ({
             />
           </div>
 
-          <Button
+          {/* <Button
+            variant="default"
+            className="w-full"
+            onClick={onDownloadCsv}
+            disabled={!hasData || isLoading}
+          >
+            <FileSpreadsheet className="w-4 h-4 mr-2" />
+            {isLoading ? "Processing..." : "Download CSV"}
+          </Button> */}
+        </div>
+
+
+        <Button
             variant="default"
             className="w-full"
             onClick={onDownloadCsv}
@@ -461,7 +560,20 @@ export const Sem5Converter: React.FC<SimplePdfConverterProps> = ({
             <FileSpreadsheet className="w-4 h-4 mr-2" />
             {isLoading ? "Processing..." : "Download CSV"}
           </Button>
-        </div>
+
+          {/* --- ADD THIS NEW BUTTON HERE --- */}
+          <Button
+            variant="secondary" // Different style to distinguish it
+            className="w-full mt-2"
+            onClick={uploadToBackend}
+            disabled={!hasData || isLoading}
+          >
+            <BarChart3 className="w-4 h-4 mr-2" />
+            Upload to Database & Analyze
+          </Button>
+
+
+
 
         {hasData && (
           <div className="pt-4 border-t">

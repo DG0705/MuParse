@@ -227,6 +227,71 @@ export const Sem7Converter: React.FC = () => {
     return ["Seat No", "Name", "Result", "SGPI", ...markCols];
   }, []);
 
+
+
+const uploadToBackend = async () => {
+    // Check if we have students data
+    if (students.length === 0) {
+      toast({ 
+        title: "No data", 
+        description: "Please process a PDF first.",
+        variant: "destructive" 
+      });
+      return;
+    }
+
+    // 1. Convert parsed students to CSV string (using existing utility)
+    const csvData = toCsv(students);
+    
+    // 2. Create File Object
+    const blob = new Blob([csvData], { type: "text/csv" });
+    const file = new File([blob], "data.csv", { type: "text/csv" });
+
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("semester", "7"); // Set for Semester 7
+
+    setIsLoading(true);
+    try {
+      const res = await fetch("http://localhost:5000/api/students/upload-csv", {
+        method: "POST",
+        body: formData,
+      });
+      const json = await res.json();
+      
+      if (res.ok) {
+        toast({ 
+          title: "Success", 
+          description: "Data stored in Database! You can now view analysis." 
+        });
+      } else {
+        toast({ 
+          title: "Upload Failed", 
+          description: json.message || "Unknown error occurred", 
+          variant: "destructive" 
+        });
+      }
+    } catch (err) {
+      console.error(err);
+      toast({ 
+        title: "Connection Error", 
+        description: "Is the backend server running on port 5000?", 
+        variant: "destructive" 
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+
+
+
+
+
+
+
+
+  
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b bg-card sticky top-0 z-10 backdrop-blur-sm bg-card/95">
@@ -283,15 +348,52 @@ export const Sem7Converter: React.FC = () => {
               <label className="text-sm font-medium">
                 3. Download Formatted Data
               </label>
-              <Button
+              {/* <Button
                 variant="outline"
                 className="w-full"
                 onClick={onDownloadCsv}
                 disabled={!hasData || isLoading}
               >
                 {isLoading ? "Processing..." : "Download CSV"}
-              </Button>
+              </Button> */}
             </div>
+
+
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">
+                3. Actions
+              </label>
+              <div className="flex flex-col gap-2">
+                {/* Existing Download Button */}
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={onDownloadCsv}
+                  disabled={!hasData || isLoading}
+                >
+                  {isLoading ? "Processing..." : "Download CSV"}
+                </Button>
+
+                {/* --- ADD THIS NEW BUTTON HERE --- */}
+                <Button
+                  variant="default"
+                  className="w-full"
+                  onClick={uploadToBackend}
+                  disabled={!hasData || isLoading}
+                >
+                  Upload to Database & Analyze
+                </Button>
+              </div>
+            </div>
+
+
+
+
+
+
+
+
           </Card>
 
           <div className="grid md:grid-cols-2 gap-6">

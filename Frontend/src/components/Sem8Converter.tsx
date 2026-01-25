@@ -4,6 +4,15 @@ import { Link } from "react-router-dom";
 import PdfResultConverter from "./PdfResultConverter";
 
 const Sem1Converter = () => {
+
+
+
+
+
+
+
+
+  
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b bg-card sticky top-0 z-10 backdrop-blur-sm bg-card/95">
