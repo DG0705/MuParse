@@ -1,5 +1,5 @@
+import { getSemesterModel } from '../controllers/utils.js'; // or wherever you put it
 import StudentMaster from '../models/StudentMaster.js';
-import SemesterResult from '../models/SemesterResult.js';
 import Papa from 'papaparse';
 
 // 1. Upload CSV and Store Data (Updates both Master and Semester tables)
