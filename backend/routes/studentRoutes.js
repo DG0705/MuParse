@@ -1,6 +1,7 @@
 import express from 'express';
 import multer from 'multer';
-import { uploadCsvData, getStudents } from '../controllers/studentController.js';
+import { uploadCsvData, getStudents ,getStudentHistory, getStudentsByBatch } from '../controllers/studentController.js';
+
 
 
 
@@ -17,5 +18,11 @@ router.get('/', getStudents);
 
 // Get Analysis (New Endpoint)
 // router.get('/analysis', getStudentAnalysis);
+
+
+// New Route for searching by PRN
+router.get('/history/:prn', getStudentHistory);
+
+router.get('/batch/:batch', getStudentsByBatch);
 
 export default router;

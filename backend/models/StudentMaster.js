@@ -1,3 +1,5 @@
+// backend/models/StudentMaster.js
+
 import mongoose from 'mongoose';
 
 const studentMasterSchema = new mongoose.Schema({
@@ -10,6 +12,11 @@ const studentMasterSchema = new mongoose.Schema({
     type: String, 
     required: true 
   },
+  // NEW COLUMN: Stores the first 4 digits of PRN
+  batch: {
+    type: String,
+    default: null
+  },
   gender: { 
     type: String, 
     default: null 
@@ -18,7 +25,6 @@ const studentMasterSchema = new mongoose.Schema({
     type: String, 
     default: null 
   },
-  // Stores the student's current academic status
   category: { 
     type: String, 
     enum: ['Regular', 'Regular with KT', 'Regular with Drop', 'Unknown'],

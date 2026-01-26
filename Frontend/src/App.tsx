@@ -24,6 +24,7 @@ import Sem8Analysis from "./components/Sem8Analysis";
 import Sem1Analysis from "./components/Sem1Analysis";
 import Sem2Analysis from "./components/Sem2Analysis";
 import Sem7Analysis from "./components/Sem7Analysis";
+import StudentHistory from "./components/StudentHistory";
 
 const queryClient = new QueryClient();
 
@@ -42,6 +43,13 @@ const App = () => (
           <Route path="/year4" element={<Year4 />} />
           <Route path="/sem1-converter" element={<Sem1Converter />} />
           <Route path="/sem2-converter" element={<Sem2Converter />} />
+
+
+
+          <Route path="/student-history" element={<StudentHistory />} />
+
+
+
           <Route
             path="/sem3-converter"
             element={
