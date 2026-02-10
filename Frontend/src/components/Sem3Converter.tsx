@@ -225,8 +225,6 @@ export const Sem3Converter: React.FC<SimplePdfConverterProps> = ({ title, descri
       const { records } = parseTextToStructuredData(fullText);
       setStudentRecords(records);
       
-      // --- LOGIC CHANGE: DO NOT SET ANALYSIS DATA HERE ---
-      // We only show the preview. Analysis happens after DB upload.
       toast({ title: "PDF Parsed", description: "Preview loaded. Click 'Upload to Database' to analyze." });
 
     } catch (error) {
@@ -259,30 +257,41 @@ export const Sem3Converter: React.FC<SimplePdfConverterProps> = ({ title, descri
         let sgpa = 'N/A';
         let finalResult = 'N/A';
         
+        // --- UPDATED NAME EXTRACTION LOGIC ---
+        // 1. Calculate nameStart based on the EXPECTED_COMPONENT_COUNT-th grade occurrence
         let nameStart = 0;
-        if (subjectGrades.length === EXPECTED_COMPONENT_COUNT) {
-             const gradesMatch = gradeAndMetadataBlock.matchAll(/[A-Z\-]+/g);
-             let i = 0;
-             let lastGradeMatch: RegExpMatchArray | null = null;
-             for (const gMatch of gradesMatch) {
-                if (i === EXPECTED_COMPONENT_COUNT - 1) { 
-                    lastGradeMatch = gMatch;
-                    break;
-                }
-                i++;
-             }
+        const allGradeMatches = [...gradeAndMetadataBlock.matchAll(/[A-Z\-]+(\+[A-Z])?/g)];
+        
+        // We look for the grade at index (EXPECTED_COMPONENT_COUNT - 1)
+        if (allGradeMatches.length >= EXPECTED_COMPONENT_COUNT) {
+             const lastGradeMatch = allGradeMatches[EXPECTED_COMPONENT_COUNT - 1];
              if (lastGradeMatch && lastGradeMatch.index !== undefined) {
                  nameStart = lastGradeMatch.index + lastGradeMatch[0].length;
              }
+        } else {
+             // Fallback: if we didn't find enough grades, just start from 0 
+             // (This avoids "N/A" but might include grades in name, which we clean later)
+             nameStart = 0; 
         }
-        
-        const nameAndMetadataBlock = gradeAndMetadataBlock.substring(nameStart);
-        const nameSplit = nameAndMetadataBlock.split(/\n\s*C\s*[\d\-]+/); 
-        let nameText = nameSplit[0] || 'N/A';
 
-        name = nameText.trim().replace(/\r/g, '').replace(/\n/g, ' ').replace(/^\/\s*/, '').replace(/\s+/g, ' '); 
+        // 2. Extract the section that contains Name + Metadata
+        let rawNameSection = gradeAndMetadataBlock.substring(nameStart);
 
-        const sgpaResultBlock = nameAndMetadataBlock; 
+        // 3. Trim "Garbage" specifically (e.g., " C - - -", " GPC", " GP ", " TOTAL")
+        // This splits the string at the first occurrence of these footer markers
+        const garbageMatch = rawNameSection.match(/(\s+C\s+[\-\d]|\s+GPC\s|\s+GP\s|\s+TOT\s)/);
+        if (garbageMatch && garbageMatch.index !== undefined) {
+             rawNameSection = rawNameSection.substring(0, garbageMatch.index);
+        }
+
+        // 4. Final Clean: Remove non-name characters (keeping letters, dots, hyphens)
+        name = rawNameSection.trim()
+            .replace(/[^a-zA-Z\s\.\-']/g, "")
+            .replace(/\s+/g, " ")
+            .trim();
+        // -------------------------------------
+
+        const sgpaResultBlock = gradeAndMetadataBlock.substring(nameStart); 
         const sgpaResultMatch = sgpaResultBlock.match(/[\d\.-]+\s+([PF])\s*$/);
         
         if (sgpaResultMatch) {
@@ -299,7 +308,8 @@ export const Sem3Converter: React.FC<SimplePdfConverterProps> = ({ title, descri
         subjectMarks.forEach((mark, index) => { record[MARK_HEADERS[index]] = mark; });
         subjectGrades.forEach((grade, index) => { record[GRADE_HEADERS[index]] = grade; });
 
-        if (subjectMarks.length === EXPECTED_COMPONENT_COUNT && subjectGrades.length === EXPECTED_COMPONENT_COUNT) records.push(record);
+        // Push record even if marks/grades count is slightly off to avoid missing data
+        if (subjectMarks.length > 0) records.push(record);
     }
     
     const rows = records.map(record => FINAL_HEADERS.map(header => record[header] || 'N/A'));
@@ -343,7 +353,6 @@ export const Sem3Converter: React.FC<SimplePdfConverterProps> = ({ title, descri
 
     setIsLoading(true);
     try {
-      // 1. Upload to Database
       toast({ title: "Uploading...", description: "Sending data to database." });
       const res = await fetch("http://localhost:5000/api/students/upload-csv", { method: "POST", body: formData });
       const json = await res.json();
@@ -354,11 +363,10 @@ export const Sem3Converter: React.FC<SimplePdfConverterProps> = ({ title, descri
 
       toast({ title: "Success", description: "Data uploaded. Fetching for analysis..." });
 
-      // 2. Fetch from Database to Ensure Integrity
       const fetchRes = await fetch("http://localhost:5000/api/students?semester=3");
       if (!fetchRes.ok) throw new Error("Failed to fetch data from DB");
       
-      const dbStudents = await fetchRes.json(); // Array of SemesterResult objects
+      const dbStudents = await fetchRes.json(); 
 
       if (dbStudents.length === 0) {
         toast({ title: "Warning", description: "Database is empty for Semester 3." });
@@ -366,8 +374,6 @@ export const Sem3Converter: React.FC<SimplePdfConverterProps> = ({ title, descri
         return;
       }
 
-      // 3. Map DB Data back to Analysis Format
-      // The DB stores the CSV row object in the 'subjects' field
       const recordsFromDB = dbStudents.map((s: any) => s.subjects);
       
       const analysis = analyzeStudentRecords(recordsFromDB);
@@ -407,7 +413,6 @@ export const Sem3Converter: React.FC<SimplePdfConverterProps> = ({ title, descri
         {hasData && (<div className="pt-4 border-t"><p className="text-sm text-muted-foreground">{studentRecords.length} student records ready to process.</p></div>)}
       </Card>
       
-      {/* 4. Only Show Analysis if analysisData is set (after DB fetch) */}
       {analysisData && Object.keys(analysisData).length > 0 && (
         <Card className="p-6 space-y-4">
             <div className="flex items-center gap-2"><BarChart3 className="w-5 h-5" /><h3 className="text-lg font-semibold">Result Analysis (From Database)</h3></div>
