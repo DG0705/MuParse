@@ -249,8 +249,25 @@ export const Sem4Converter: React.FC<SimplePdfConverterProps> = ({
 
   const parseTextToStructuredData = (text: string): { headers: string[]; rows: string[][]; records: RawStudentRecord[] } => {
     const records: RawStudentRecord[] = [];
-    const studentBlockRegex = /(\d{5})\s*MarksO\s*([\s\S]*?)\s*Grade\s*([\s\S]*?)(?=\d{5}\s*MarksO|\Z)/g;
-    const cleanedText = text.replace(/\r/g, '').replace(/\n\s{1,}\n/g, '\n\n'); 
+    
+    // 1. Pre-process to remove footer "noise" that prevents the regex from seeing the end of the last student
+    const noisePatterns = [
+        /MARKS\s+>=80[\s\S]*?GRADE POINT\s*:\s*\d+/g,
+        /Result Sheet for S\.E\.[\s\S]*?May 2025/g,
+        /PREPARED BY[\s\S]*?Page \d of \d/g,
+        /Courses →[\s\S]*?MinM[\s\S]*?10/g
+    ];
+    
+    let cleanedText = text;
+    noisePatterns.forEach(pattern => {
+        cleanedText = cleanedText.replace(pattern, '');
+    });
+
+    // 2. UPDATED REGEX:
+    // - Marks[A-Z]? catches "Marks", "MarksO", and "MarksD"
+    // - Lookahead ensured it stops at the next ID or the very end of the string
+   const studentBlockRegex =
+/(\d{5,10})\s*Marks[A-Z]?\s*([\s\S]*?)\s*Grade\s*([\s\S]*?)(?=\d{5,10}\s*Marks[A-Z]?|$)/g;
 
     let match;
     while ((match = studentBlockRegex.exec(cleanedText)) !== null) {
@@ -260,56 +277,35 @@ export const Sem4Converter: React.FC<SimplePdfConverterProps> = ({
 
         const marksTokens = marksBlock.match(/[\d+\-EF\*\!]+|[\d]+/g) || [];
         const subjectMarks = marksTokens.slice(0, EXPECTED_COMPONENT_COUNT);
-        const totalMarks = marksTokens.length > EXPECTED_COMPONENT_COUNT ? marksTokens[EXPECTED_COMPONENT_COUNT] : 'N/A';
+        const totalMarks = marksTokens.length >= EXPECTED_COMPONENT_COUNT ? marksTokens[EXPECTED_COMPONENT_COUNT] : 'N/A';
         
-        const gradeTokens = gradeAndMetadataBlock.match(/[A-Z\-]+/g) || [];
+        const gradeTokens = gradeAndMetadataBlock.match(/\b[A-Z]\b|(?:\s|^)[A-Z](?=\s|$)/g) || [];
         const subjectGrades = gradeTokens.slice(0, EXPECTED_COMPONENT_COUNT);
         
+        // --- IMPROVED NAME EXTRACTION ---
         let name = 'N/A';
+        const potentialNameParts = gradeAndMetadataBlock
+            .replace(/\b[A-Z]\b/g, '') // Remove single character grades
+            .replace(/(?:GP\*?C|GPC|GPA|SGPI|RESULT|TOTAL|Marks[A-Z]?|Grade)/gi, '') 
+            .match(/[A-Z\/\s]{5,}/g); 
+
+        if (potentialNameParts && potentialNameParts.length > 0) {
+            name = potentialNameParts.sort((a, b) => b.length - a.length)[0]
+                .replace(/[\/\n\r]/g, ' ') 
+                .replace(/\s+/g, ' ')
+                .trim();
+        }
+
+        // --- RESULT & SGPA ---
         let sgpa = 'N/A';
         let finalResult = 'N/A';
+        const resultMatch = gradeAndMetadataBlock.match(/([\d\.]+)\s+([PF])\s*$/);
         
-        // --- UPDATED NAME EXTRACTION LOGIC ---
-        let nameStart = 0;
-        const allGradeMatches = [...gradeAndMetadataBlock.matchAll(/[A-Z\-]+(\+[A-Z])?/g)];
-        
-        if (allGradeMatches.length >= EXPECTED_COMPONENT_COUNT) {
-             const lastGradeMatch = allGradeMatches[EXPECTED_COMPONENT_COUNT - 1];
-             if (lastGradeMatch && lastGradeMatch.index !== undefined) {
-                 nameStart = lastGradeMatch.index + lastGradeMatch[0].length;
-             }
-        } else {
-             nameStart = 0;
-        }
-
-        let rawNameSection = gradeAndMetadataBlock.substring(nameStart);
-
-        const garbageMatch = rawNameSection.match(/(\s+C\s+[\-\d]|\s+GPC\s|\s+GP\s|\s+TOT\s)/);
-        if (garbageMatch && garbageMatch.index !== undefined) {
-             rawNameSection = rawNameSection.substring(0, garbageMatch.index);
-        }
-
-        name = rawNameSection.trim()
-            .replace(/[^a-zA-Z\s\.\-']/g, "")
-            .replace(/\s+/g, " ")
-            .trim();
-        // -------------------------------------
-        
-        const sgpaResultBlock = gradeAndMetadataBlock.substring(nameStart);
-        const sgpaResultMatch = sgpaResultBlock.match(/[\d\.-]+\s+([PF])\s*$/);
-        
-        if (sgpaResultMatch) {
-            const finalResultLetter = sgpaResultMatch[1];
-            const sgpaMatch = sgpaResultBlock.match(/([\d\.-]+)\s+([PF])\s*$/);
-            if (sgpaMatch && sgpaMatch.length > 1) {
-                sgpa = sgpaMatch[1];
-            } else {
-                sgpa = 'N/A';
-            }
-            finalResult = finalResultLetter;
-        } else if (sgpaResultBlock.includes('- -   F')) {
-             sgpa = '- -';
-             finalResult = 'F';
+        if (resultMatch) {
+            sgpa = resultMatch[1];
+            finalResult = resultMatch[2];
+        } else if (gradeAndMetadataBlock.includes(' F ')) {
+            finalResult = 'F';
         }
 
         const record: RawStudentRecord = {
@@ -328,12 +324,9 @@ export const Sem4Converter: React.FC<SimplePdfConverterProps> = ({
         }
     }
     
-    const rows = records.map(record => {
-        return FINAL_HEADERS.map(header => record[header] || 'N/A');
-    });
-
+    const rows = records.map(record => FINAL_HEADERS.map(header => record[header] || 'N/A'));
     return { headers: FINAL_HEADERS, rows, records };
-  };
+};
 
   const onDownloadCsv = () => {
     if (!extractedText) {

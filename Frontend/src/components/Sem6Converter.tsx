@@ -240,8 +240,11 @@ export const Sem6Converter: React.FC<SimplePdfConverterProps> = ({
   const parseTextToStructuredData = (text: string): { headers: string[]; rows: string[][]; records: RawStudentRecord[] } => {
     const records: RawStudentRecord[] = [];
     
-    const studentBlockRegex = /(\d{5})\s*MarksO\s*([\s\S]*?)\s*Grade\s*([\s\S]*?)(?=\d{5}\s*MarksO|\Z)/g;
-    const cleanedText = text.replace(/\r/g, '').replace(/\n\s{1,}\n/g, '\n\n'); 
+    const studentBlockRegex =
+/(\d{5,10})\s*MarksO\s*([\s\S]*?)\s*Grade\s*([\s\S]*?)(?=\d{5,10}\s*MarksO|$)/g;
+    // const cleanedText = text.replace(/\r/g, '').replace(/\n\s{1,}\n/g, '\n\n'); this line i have changed because in some cases there are multiple newlines between student records and we want to preserve them to avoid merging records together
+    const cleanedText =
+text.trim().replace(/\r/g, '').replace(/\n\s{1,}\n/g, '\n\n') + "\n";
 
     let match;
     while ((match = studentBlockRegex.exec(cleanedText)) !== null) {

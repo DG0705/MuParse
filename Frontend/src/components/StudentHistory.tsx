@@ -1,4 +1,3 @@
-// Frontend/src/components/StudentHistory.tsx
 import { useState } from "react";
 import { Search, AlertTriangle, CheckCircle, GraduationCap } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -48,11 +47,40 @@ const StudentHistory = () => {
       const response = await fetch(`http://localhost:5000/api/students/history/${prn}`);
       
       if (!response.ok) {
-        throw new Error("Student not found or server error");
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.message || "Failed to fetch data from server");
       }
       
-      const result = await response.json();
-      setData(result);
+      const backendData = await response.json();
+      
+      // --- TRANSFORMATION LOGIC: Converts Backend Schema to Frontend Format ---
+      const formattedData: StudentData = {
+        profile: {
+          name: backendData.student.name,
+          prn: backendData.student.prn,
+          category: backendData.student.status || "Regular"
+        },
+        summary: {
+          totalSemestersAppeared: backendData.records.length,
+          activeKTs: "",
+          ktCount: backendData.records.filter((r: any) => r.isKT).length
+        },
+        academicHistory: {}
+      };
+
+      // Group the records by semester
+      backendData.records.forEach((record: any) => {
+        formattedData.academicHistory[`Semester ${record.semester}`] = [{
+          seatNo: record.seatNo,
+          sgpi: record.sgpi,
+          totalMarks: record.totalMarks,
+          result: record.finalResult,
+          hasKT: record.isKT,
+          subjects: record.subjects || {}
+        }];
+      });
+
+      setData(formattedData);
     } catch (err: any) {
       setError(err.message);
     } finally {

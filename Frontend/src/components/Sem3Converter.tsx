@@ -234,11 +234,22 @@ export const Sem3Converter: React.FC<SimplePdfConverterProps> = ({ title, descri
       setIsLoading(false);
     }
   };
-
-  const parseTextToStructuredData = (text: string): { headers: string[]; rows: string[][]; records: RawStudentRecord[] } => {
+const parseTextToStructuredData = (text: string): { headers: string[]; rows: string[][]; records: RawStudentRecord[] } => {
     const records: RawStudentRecord[] = [];
-    const studentBlockRegex = /(\d{5})\s*MarksO\s*([\s\S]*?)\s*Grade\s*([\s\S]*?)(?=\d{5}\s*MarksO|\Z)/g;
-    const cleanedText = text.replace(/\r/g, '').replace(/\n\s{1,}\n/g, '\n\n'); 
+    
+    const noisePatterns = [
+        /MARKS\s+>=80[\s\S]*?GRADE POINT\s*:\s*\d+/g,
+        /Result Sheet for S\.E\.[\s\S]*?May 2025/g,
+        /PREPARED BY[\s\S]*?Page \d of \d/g,
+        /Courses →[\s\S]*?MinM[\s\S]*?10/g 
+    ];
+    
+    let cleanedText = text;
+    noisePatterns.forEach(pattern => {
+        cleanedText = cleanedText.replace(pattern, '');
+    });
+
+    const studentBlockRegex = /(\d{5})\s*Marks[A-Z]?\s*([\s\S]*?)\s*Grade\s*([\s\S]*?)(?=(?:\n\s*\d{5}\s*Marks[A-Z]?)|$)/g;
 
     let match;
     while ((match = studentBlockRegex.exec(cleanedText)) !== null) {
@@ -246,76 +257,74 @@ export const Sem3Converter: React.FC<SimplePdfConverterProps> = ({ title, descri
         const marksBlock = match[2];
         const gradeAndMetadataBlock = match[3];
 
-        const marksTokens = marksBlock.match(/[\d+\-EF\*\!]+|[\d]+/g) || [];
+        // 1. Updated Regex to catch 'Ab' (Absent) as a valid mark token
+        const marksTokens = marksBlock.match(/[\d+\-EF\*\!Ab]+|[\d]+/g) || [];
         const subjectMarks = marksTokens.slice(0, EXPECTED_COMPONENT_COUNT);
-        const totalMarks = marksTokens.length > EXPECTED_COMPONENT_COUNT ? marksTokens[EXPECTED_COMPONENT_COUNT] : 'N/A';
         
-        const gradeTokens = gradeAndMetadataBlock.match(/[A-Z\-]+/g) || [];
+        // 2. IMPROVED TOTAL MARKS LOGIC
+        // Look for the total marks in the tokens immediately after the subject components
+        let totalMarks = 'N/A';
+        const postComponentTokens = marksTokens.slice(EXPECTED_COMPONENT_COUNT);
+        
+        // Students 53019-53021 often have their total marks as the 1st or 2nd token after subjects
+        if (postComponentTokens.length > 0) {
+            // Find the first token that looks like a 3-digit total or isn't just 'Ab'
+            const foundTotal = postComponentTokens.find(t => /^\d{3}$/.test(t) || (!isNaN(parseInt(t)) && parseInt(t) > 100));
+            totalMarks = foundTotal || postComponentTokens[0];
+        }
+
+        const gradeTokens = gradeAndMetadataBlock.match(/\b[A-Z]\b|(?:\s|^)[A-Z](?=\s|$)/g) || [];
         const subjectGrades = gradeTokens.slice(0, EXPECTED_COMPONENT_COUNT);
         
         let name = 'N/A';
+        const potentialNameParts = gradeAndMetadataBlock
+            .replace(/\b[A-Z]\b/g, '') 
+            .replace(/(?:GP\*?C|GPC|GPA|SGPI|RESULT|TOTAL|Marks[A-Z]?|Grade)/gi, '') 
+            .match(/[A-Z\/\s]{5,}/g); 
+
+        if (potentialNameParts && potentialNameParts.length > 0) {
+            name = potentialNameParts.sort((a, b) => b.length - a.length)[0]
+                .replace(/[\/\n\r]/g, ' ') 
+                .replace(/\s+/g, ' ')
+                .trim();
+        }
+
+        // 3. IMPROVED RESULT CAPTURE (Fixes the N/A issue)
         let sgpa = 'N/A';
         let finalResult = 'N/A';
         
-        // --- UPDATED NAME EXTRACTION LOGIC ---
-        // 1. Calculate nameStart based on the EXPECTED_COMPONENT_COUNT-th grade occurrence
-        let nameStart = 0;
-        const allGradeMatches = [...gradeAndMetadataBlock.matchAll(/[A-Z\-]+(\+[A-Z])?/g)];
+        // Specifically look for P or F at the end of the metadata block
+        const resultMatch = gradeAndMetadataBlock.match(/([\d\.]+)?\s+([PF])\s*$/); 
         
-        // We look for the grade at index (EXPECTED_COMPONENT_COUNT - 1)
-        if (allGradeMatches.length >= EXPECTED_COMPONENT_COUNT) {
-             const lastGradeMatch = allGradeMatches[EXPECTED_COMPONENT_COUNT - 1];
-             if (lastGradeMatch && lastGradeMatch.index !== undefined) {
-                 nameStart = lastGradeMatch.index + lastGradeMatch[0].length;
-             }
+        if (resultMatch) {
+            if (resultMatch[1]) sgpa = resultMatch[1];
+            finalResult = resultMatch[2];
         } else {
-             // Fallback: if we didn't find enough grades, just start from 0 
-             // (This avoids "N/A" but might include grades in name, which we clean later)
-             nameStart = 0; 
+            // Fallback for cases like student 53019/53020 where formatting is loose
+            if (gradeAndMetadataBlock.includes(' P')) finalResult = 'P';
+            else if (gradeAndMetadataBlock.includes(' F')) finalResult = 'F';
+            
+            const sgpaOnlyMatch = gradeAndMetadataBlock.match(/(\d\.\d{2})/);
+            if (sgpaOnlyMatch) sgpa = sgpaOnlyMatch[1];
         }
 
-        // 2. Extract the section that contains Name + Metadata
-        let rawNameSection = gradeAndMetadataBlock.substring(nameStart);
-
-        // 3. Trim "Garbage" specifically (e.g., " C - - -", " GPC", " GP ", " TOTAL")
-        // This splits the string at the first occurrence of these footer markers
-        const garbageMatch = rawNameSection.match(/(\s+C\s+[\-\d]|\s+GPC\s|\s+GP\s|\s+TOT\s)/);
-        if (garbageMatch && garbageMatch.index !== undefined) {
-             rawNameSection = rawNameSection.substring(0, garbageMatch.index);
-        }
-
-        // 4. Final Clean: Remove non-name characters (keeping letters, dots, hyphens)
-        name = rawNameSection.trim()
-            .replace(/[^a-zA-Z\s\.\-']/g, "")
-            .replace(/\s+/g, " ")
-            .trim();
-        // -------------------------------------
-
-        const sgpaResultBlock = gradeAndMetadataBlock.substring(nameStart); 
-        const sgpaResultMatch = sgpaResultBlock.match(/[\d\.-]+\s+([PF])\s*$/);
+        const record: RawStudentRecord = { 
+            'Seat No': seatNo, 
+            'Name': name, 
+            'Total Marks': totalMarks, 
+            'SGPA': sgpa, 
+            'Final Result': finalResult 
+        };
         
-        if (sgpaResultMatch) {
-            const finalResultLetter = sgpaResultMatch[1];
-            const sgpaMatch = sgpaResultBlock.match(/([\d\.-]+)\s+([PF])\s*$/);
-            if (sgpaMatch && sgpaMatch.length > 1) sgpa = sgpaMatch[1];
-            finalResult = finalResultLetter;
-        } else if (sgpaResultBlock.includes('- -   F')) {
-             sgpa = '- -';
-             finalResult = 'F';
-        }
-
-        const record: RawStudentRecord = { 'Seat No': seatNo, 'Name': name, 'Total Marks': totalMarks, 'SGPA': sgpa, 'Final Result': finalResult };
         subjectMarks.forEach((mark, index) => { record[MARK_HEADERS[index]] = mark; });
         subjectGrades.forEach((grade, index) => { record[GRADE_HEADERS[index]] = grade; });
 
-        // Push record even if marks/grades count is slightly off to avoid missing data
         if (subjectMarks.length > 0) records.push(record);
     }
     
     const rows = records.map(record => FINAL_HEADERS.map(header => record[header] || 'N/A'));
     return { headers: FINAL_HEADERS, rows, records };
-  };
-
+};
   const onDownloadCsv = () => {
     if (!extractedText) return;
     const { headers, rows } = parseTextToStructuredData(extractedText);

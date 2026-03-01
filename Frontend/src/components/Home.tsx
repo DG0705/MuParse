@@ -117,7 +117,7 @@ const Home = () => {
 
   const currentKts = getAllKts(studentData);
 
-  // --- Handle Individual Search (Name or PRN) ---
+// --- Handle Individual Search (Name or PRN) ---
   const handleSearch = async (queryOverride?: string) => {
     const query = queryOverride || searchQuery;
     if (!query) return;
@@ -129,14 +129,46 @@ const Home = () => {
 
     try {
       const response = await fetch(`http://localhost:5000/api/students/history/${query}`);
-      if (!response.ok) throw new Error("Student not found");
-      const result = await response.json();
+      
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.message || "Student not found");
+      }
+      
+      const backendData = await response.json();
 
-      if (result.type === "multiple") {
-        setMultipleMatches(result);
+      if (backendData.type === "multiple") {
+        setMultipleMatches(backendData);
         setShowSelectionDialog(true);
       } else {
-        setStudentData(result);
+        // --- FIX: Transform the backend data into the format the frontend expects ---
+        const formattedData: StudentData = {
+          profile: {
+            name: backendData.student.name,
+            prn: backendData.student.prn,
+            category: backendData.student.status || "Regular"
+          },
+          summary: {
+            totalSemestersAppeared: backendData.records.length,
+            activeKTs: "", 
+            ktCount: backendData.records.filter((r: any) => r.isKT).length
+          },
+          academicHistory: {}
+        };
+
+        // Group the records by semester
+        backendData.records.forEach((record: any) => {
+          formattedData.academicHistory[`Semester ${record.semester}`] = [{
+            seatNo: record.seatNo,
+            sgpi: record.sgpi,
+            totalMarks: record.totalMarks,
+            result: record.finalResult,
+            hasKT: record.isKT,
+            subjects: record.subjects || {}
+          }];
+        });
+
+        setStudentData(formattedData);
       }
     } catch (err: any) {
       setError(err.message);
