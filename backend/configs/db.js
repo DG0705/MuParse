@@ -1,8 +1,8 @@
-import mongoose from "mongoose";
+const mongoose = require("mongoose");
 const connectDB = async () => {
   try {
     const conn = await mongoose.connect(
-      `mongodb+srv://MuParseUser:kT2yki8ErcA3cq3d@cluster0.bq0sluh.mongodb.net/StudentDB`
+      `mongodb+srv://MuParseUser:kT2yki8ErcA3cq3d@cluster0.bq0sluh.mongodb.net/StudentDB`,
     );
 
     console.log(`MongoDB Connected: ${conn.connection.host}`);
@@ -12,4 +12,4 @@ const connectDB = async () => {
   }
 };
 
-export default connectDB;
+module.exports = connectDB;
