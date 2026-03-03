@@ -19,6 +19,6 @@
     "nodemon": "^3.1.11",
     "papaparse": "^5.5.3",
     "pdf-parse": "^1.1.1",
-    "pdfjs-dist": "^2.16.105"
+    "pdfjs-dist": "^5.4.624"
   }
 }

@@ -16,15 +16,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { ArrowLeft, FileJson, Loader2, Upload } from "lucide-react";
+import { ArrowLeft, FileJson, Loader2, Upload, Database } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const IsolatedPdfConverter = () => {
   const [file, setFile] = useState<File | null>(null);
   const [semester, setSemester] = useState<string>("1");
   const [loading, setLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false); // NEW: Loading state for saving
   const [extractedData, setExtractedData] = useState<any[] | null>(null);
 
+  // 1. Function to Preview/Extract Data
   const handleProcess = async () => {
     if (!file) {
       toast.error("Please select a PDF file first");
@@ -56,7 +58,7 @@ const IsolatedPdfConverter = () => {
 
       if (result.success) {
         setExtractedData(result.data);
-        toast.success(`Successfully extracted ${result.count} records`);
+        toast.success(`Successfully extracted ${result.data.length} records for preview`);
       } else {
         toast.error(result.error || "Extraction failed");
       }
@@ -65,6 +67,41 @@ const IsolatedPdfConverter = () => {
       toast.error(error.message || "Server connection error");
     } finally {
       setLoading(false);
+    }
+  };
+
+  // 2. NEW: Function to Save directly to MongoDB
+  const handleSaveToDatabase = async () => {
+    if (!file) return;
+
+    setIsSaving(true);
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("semester", semester);
+
+    try {
+      toast.info("Saving records to database...");
+      
+      const response = await fetch(
+        "http://localhost:5000/api/students/upload-pdf", 
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || result.error || "Failed to save to database");
+      }
+
+      toast.success(result.message || "Successfully saved to database!");
+    } catch (error: any) {
+      console.error("Save Error:", error);
+      toast.error(error.message || "Database connection error");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -127,12 +164,12 @@ const IsolatedPdfConverter = () => {
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Processing PDF...
+                  Processing Preview...
                 </>
               ) : (
                 <>
                   <Upload className="mr-2 h-4 w-4" />
-                  Extract Data
+                  Extract Preview Data
                 </>
               )}
             </Button>
@@ -141,33 +178,51 @@ const IsolatedPdfConverter = () => {
 
         {extractedData && (
           <Card className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <CardHeader className="flex flex-row items-center justify-between">
+            <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-4">
               <div>
                 <CardTitle className="flex items-center gap-2">
                   <FileJson className="h-5 w-5" />
                   Extracted Results
                 </CardTitle>
                 <CardDescription>
-                  Raw JSON output from the extractor
+                  Preview of the data mapped from the PDF
                 </CardDescription>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  const blob = new Blob(
-                    [JSON.stringify(extractedData, null, 2)],
-                    { type: "application/json" },
-                  );
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement("a");
-                  a.href = url;
-                  a.download = `sem${semester}_extracted.json`;
-                  a.click();
-                }}
-              >
-                Download JSON
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const blob = new Blob(
+                      [JSON.stringify(extractedData, null, 2)],
+                      { type: "application/json" },
+                    );
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `sem${semester}_extracted.json`;
+                    a.click();
+                  }}
+                >
+                  Download JSON
+                </Button>
+                
+                {/* NEW: Save to Database Button */}
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={handleSaveToDatabase}
+                  disabled={isSaving}
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                >
+                  {isSaving ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Database className="mr-2 h-4 w-4" />
+                  )}
+                  Save to Database
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="bg-muted p-4 rounded-lg overflow-auto max-h-[500px]">
