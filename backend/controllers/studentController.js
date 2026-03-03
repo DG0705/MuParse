@@ -6,6 +6,17 @@ const AcademicRecord = require("../models/AcademicRecord");
 const { extractSem1 } = require("../utils/isolated/sem1Processor");
 const { extractSem2 } = require("../utils/isolated/sem2Processor");
 
+// Sequence-independent normalization
+const normalize = (str) => {
+  return (str || "")
+    .toLowerCase()
+    .replace(/[^a-z\s]/g, "") 
+    .split(/\s+/)             
+    .filter((word) => word.length > 0)
+    .sort()                   
+    .join("");                
+};
+
 // --- 1. Upload CSV ---
 const uploadCsvData = async (req, res) => {
   try {
@@ -20,7 +31,6 @@ const uploadCsvData = async (req, res) => {
     if (!data || data.length === 0) return res.status(400).json({ message: "CSV file is empty." });
 
     const existingStudents = await StudentMaster.find({}, "prn name motherName");
-    const normalize = (str) => (str || "").replace(/[^a-zA-Z]/g, "").toLowerCase();
 
     const masterOps = [];
     const academicOps = [];
@@ -39,8 +49,8 @@ const uploadCsvData = async (req, res) => {
         const normCsvName = normalize(csvName);
         const match = existingStudents.find((student) => {
           const normMasterName = normalize(student.name);
-          const normMotherName = normalize(student.motherName);
-          return (normMotherName && normCsvName === normMasterName + normMotherName) || normCsvName === normMasterName;
+          const normCombinedName = normalize(`${student.name || ""} ${student.motherName || ""}`);
+          return (student.motherName && normCsvName === normCombinedName) || normCsvName === normMasterName;
         });
         if (match) rawPRN = match.prn;
       }
@@ -50,6 +60,15 @@ const uploadCsvData = async (req, res) => {
 
       const finalResultStr = s["Result"] || s["Final Result"] || "N/A";
       const isFail = finalResultStr.toLowerCase().includes("fail") || finalResultStr.toLowerCase().includes("kt") || finalResultStr.toLowerCase().includes("unsuccessful");
+
+      // --- NEW FIX: Filter out non-subject columns so "Result" isn't saved as a subject ---
+      const flatSubjects = {};
+      const excludedKeys = ["seat no", "seat_no", "prn", "name", "mother name", "mother_name", "gender", "status", "result", "final result", "sgpi", "sgpa", "total marks"];
+      Object.keys(s).forEach((key) => {
+        if (!excludedKeys.includes(key.toLowerCase().trim())) {
+          flatSubjects[key] = s[key];
+        }
+      });
 
       masterOps.push({
         updateOne: {
@@ -66,7 +85,8 @@ const uploadCsvData = async (req, res) => {
         updateOne: {
           filter: { prn: finalPRN, semester: semNum },
           update: {
-            $set: { seatNo: cleanSeatNo, sgpi: s["SGPI"] || s["SGPA"] || "0", totalMarks: s["Total Marks"] || "0", finalResult: finalResultStr, isKT: isFail, subjects: s },
+            // Save the cleaned `flatSubjects` instead of the raw `s`
+            $set: { seatNo: cleanSeatNo, sgpi: s["SGPI"] || s["SGPA"] || "0", totalMarks: s["Total Marks"] || "0", finalResult: finalResultStr, isKT: isFail, subjects: flatSubjects },
           },
           upsert: true,
         },
@@ -104,7 +124,6 @@ const uploadPdfData = async (req, res) => {
     if (!extractedData || extractedData.length === 0) return res.status(400).json({ message: "Failed to extract data from PDF." });
 
     const existingStudents = await StudentMaster.find({}, "prn name motherName");
-    const normalize = (str) => (str || "").replace(/[^a-zA-Z]/g, "").toLowerCase();
 
     const masterOps = [];
     const academicOps = [];
@@ -119,8 +138,9 @@ const uploadPdfData = async (req, res) => {
         const normName = normalize(name);
         const match = existingStudents.find((st) => {
           const normMName = normalize(st.name);
-          const normMoName = normalize(st.motherName);
-          if (normMoName && normName === normMName + normMoName) return true;
+          const normCombinedName = normalize(`${st.name || ""} ${st.motherName || ""}`);
+          
+          if (st.motherName && normName === normCombinedName) return true;
           if (normName === normMName) return true;
           return false;
         });
@@ -134,7 +154,6 @@ const uploadPdfData = async (req, res) => {
       const finalResultStr = summaryData.resultStatus || summaryData.status || "N/A";
       const isFail = finalResultStr.toLowerCase().includes("fail") || finalResultStr.toLowerCase().includes("unsuccessful") || finalResultStr.toLowerCase().includes("kt");
 
-      // --- CRITICAL ARCHITECTURE FIX: Flatten subjects to match CSV format ---
       let flatSubjects = {};
       if (s.subjects) {
         Object.entries(s.subjects).forEach(([key, val]) => {
@@ -169,7 +188,7 @@ const uploadPdfData = async (req, res) => {
               totalMarks: summaryData.totalCredits || "0",
               finalResult: finalResultStr,
               isKT: isFail,
-              subjects: flatSubjects, // Saved securely as a flat map!
+              subjects: flatSubjects, 
             },
           },
           upsert: true,
@@ -233,16 +252,37 @@ const getStudentHistory = async (req, res) => {
 
     const formattedData = {
       profile: { name: student.name, prn: student.prn, category: student.status || "Regular" },
-      summary: { totalSemestersAppeared: records.length, activeKTs: "", ktCount: records.filter(r => r.isKT).length },
+      summary: { totalSemestersAppeared: records.length, activeKTs: "", ktCount: 0 },
       academicHistory: {}
     };
 
+    let exactKtCount = 0;
+
     records.forEach(record => {
+      const subs = record.subjects || {};
+      
+      // --- NEW FIX: Calculate precise subjects failed (KTs) ---
+      Object.entries(subs).forEach(([key, value]) => {
+         const k = key.toLowerCase().trim();
+         // Explicitly ignore summary metadata in case old records still have them
+         if (k === 'result' || k === 'final result' || k === 'status' || k === 'remark' || k === 'sgpi' || k === 'total marks') {
+             return;
+         }
+         
+         // If the grade is strictly 'F', count it as a KT
+         if (String(value).trim().toUpperCase() === 'F') {
+             exactKtCount++;
+         }
+      });
+
       formattedData.academicHistory[`Semester ${record.semester}`] = [{
         seatNo: record.seatNo, sgpi: record.sgpi, totalMarks: record.totalMarks, result: record.finalResult, hasKT: record.isKT,
-        subjects: record.subjects || {}
+        subjects: subs
       }];
     });
+
+    // Assign the exactly calculated KT count
+    formattedData.summary.ktCount = exactKtCount;
 
     res.status(200).json(formattedData);
   } catch (error) {
