@@ -1,4 +1,4 @@
-const pdf = require("pdf-parse"); // ⚠️ make sure version = 1.1.1
+const pdf = require("pdf-parse"); // ⚠️ Ensure version 1.1.1
 
 const extractSem1 = async (buffer) => {
   try {
@@ -8,15 +8,12 @@ const extractSem1 = async (buffer) => {
     // ================= CLEANING =================
     const headerPattern =
       /University of Mumbai[\s\S]+?FEL105-Basic Workshop Practice-I: TwCA 50\/20 50\/0(?=SEAT)/g;
-
     const footerPattern = /\/ - FEMALE, # - 0\.229A[\s\S]+?10\.00\s+/g;
-
     const noLabelPattern = /^NO$/gm;
-
     const sequencePattern =
       /SEAT\nNAME OF THE CANDIDATE\nPaper1\nPaper2\nPaper3\nPaper4\nPaper5\nRESULT\nMother Name[\s\S]+?C\*G/g;
 
-    let finalScrubbedText = text
+    let scrubbedText = text
       .replace(headerPattern, "")
       .replace(footerPattern, "")
       .replace(noLabelPattern, "")
@@ -24,171 +21,78 @@ const extractSem1 = async (buffer) => {
       .replace(/\n\s*\n/g, "\n")
       .trim();
 
-    // ================= SPLIT =================
-    const blocks = finalScrubbedText
+    // ================= SPLIT INTO BLOCKS =================
+    const blocks = scrubbedText
       .split(/(?=\b\d{7}\b)/g)
       .filter((b) => b.trim() !== "");
 
-    // ================= SEQUENTIAL =================
-    const extractedData = blocks
+    return blocks
       .map((block) => {
         const lines = block
           .split("\n")
           .map((line) => line.trim())
           .filter(Boolean);
 
-        if (lines.length < 107) {
-          console.warn("⚠️ Skipped block:", lines[0]);
-          return null;
-        }
+        if (lines.length < 107) return null;
+
+        const prnValue = lines[26];
+        const rawName = lines[1];
+        const isFemale = rawName.startsWith("/");
+        const cleanName = isFemale ? rawName.substring(1).trim() : rawName;
+
+        // Building exact flat subjects object for Map
+        const subjectsMap = {};
+
+        // Semester 1 usually has 11 papers based on your raw mapping
+        const paperMapping = [
+          { id: 1, code: 2, marks: [9, 10, 11], meta: 27 },
+          { id: 2, code: 3, marks: [12, 13, 14], meta: 31 },
+          { id: 3, code: 4, marks: [15, 16, 17], meta: 35 },
+          { id: 4, code: 5, marks: [18, 19, 20], meta: 39 },
+          { id: 5, code: 6, marks: [21, 22, 23], meta: 43 },
+          { id: 6, code: 50, marks: [56, 57, 58], meta: 80 },
+          { id: 7, code: 51, marks: [59, 60, 61], meta: 84 },
+          { id: 8, code: 52, marks: [62, 63, 64, 74, 75, 76], meta: 88 },
+          { id: 9, code: 53, marks: [65, 66, 67], meta: 92 },
+          { id: 10, code: 54, marks: [68, 69, 70, 77, 78, 79], meta: 96 },
+          { id: 11, code: 55, marks: [71, 72, 73], meta: 100 },
+        ];
+
+        paperMapping.forEach((p) => {
+          subjectsMap[`paper${p.id}code`] = lines[p.code] || "";
+          // For Semester 1, we take the last mark in the marks array as the "Total"
+          subjectsMap[`paper${p.id}marks`] =
+            lines[p.marks[p.marks.length - 1]] || "0";
+          subjectsMap[`paper${p.id}cr`] = lines[p.meta] || "0";
+          subjectsMap[`paper${p.id}gr`] = lines[p.meta + 1] || "";
+          subjectsMap[`paper${p.id}gp`] = lines[p.meta + 2] || "0";
+          subjectsMap[`paper${p.id}cxG`] = lines[p.meta + 3] || "0";
+        });
 
         return {
-          seatNo: lines[0],
-          name: lines[1],
-          motherName: lines[8],
-          prn: lines[26],
-          college: lines[49],
-
-          resultStatus: lines[7],
-          sgpa: lines[47],
-          grade: lines[48],
-          totalCredits: lines[104],
-          finalCgpa: lines[105],
-          finalGrade: lines[106],
-
-          // FULL SUBJECT MAP (RAW)
-          raw: lines,
+          studentMaster: {
+            prn: prnValue,
+            name: cleanName,
+            batch: prnValue ? prnValue.substring(0, 4) : null,
+            gender: isFemale ? "Female" : "Male",
+            motherName: lines[8],
+            category: "Regular",
+          },
+          academicRecord: {
+            prn: prnValue,
+            seatNo: lines[0],
+            semester: 1,
+            sgpi: lines[47] || "0",
+            totalMarks: lines[25] || "0", // Assuming line 25 is C*G total like Sem 2
+            finalResult: lines[7] || "Unsuccessful",
+            isKT: false,
+            subjects: subjectsMap,
+          },
         };
       })
       .filter(Boolean);
-
-    // ================= GROUPED =================
-    const groupedData = extractedData.map((s) => ({
-      studentInfo: {
-        seatNo: s.seatNo,
-        name: s.name,
-        motherName: s.motherName,
-        prn: s.prn,
-        college: s.college,
-      },
-      summary: {
-        resultStatus: s.resultStatus,
-        sgpa: s.sgpa,
-        grade: s.grade,
-        totalCredits: s.totalCredits,
-        finalCgpa: s.finalCgpa,
-        finalGrade: s.finalGrade,
-      },
-      subjects: {
-        paper1: {
-          code: s.raw[2],
-          marks: [s.raw[9], s.raw[10], s.raw[11]],
-          cr: s.raw[27],
-          gr: s.raw[28],
-          gp: s.raw[29],
-          cxG: s.raw[30],
-        },
-        paper2: {
-          code: s.raw[3],
-          marks: [s.raw[12], s.raw[13], s.raw[14]],
-          cr: s.raw[31],
-          gr: s.raw[32],
-          gp: s.raw[33],
-          cxG: s.raw[34],
-        },
-        paper3: {
-          code: s.raw[4],
-          marks: [s.raw[15], s.raw[16], s.raw[17]],
-          cr: s.raw[35],
-          gr: s.raw[36],
-          gp: s.raw[37],
-          cxG: s.raw[38],
-        },
-        paper4: {
-          code: s.raw[5],
-          marks: [s.raw[18], s.raw[19], s.raw[20]],
-          cr: s.raw[39],
-          gr: s.raw[40],
-          gp: s.raw[41],
-          cxG: s.raw[42],
-        },
-        paper5: {
-          code: s.raw[6],
-          marks: [s.raw[21], s.raw[22], s.raw[23]],
-          cr: s.raw[43],
-          gr: s.raw[44],
-          gp: s.raw[45],
-          cxG: s.raw[46],
-        },
-        paper6: {
-          code: s.raw[50],
-          marks: [s.raw[56], s.raw[57], s.raw[58]],
-          cr: s.raw[80],
-          gr: s.raw[81],
-          gp: s.raw[82],
-          cxG: s.raw[83],
-        },
-        paper7: {
-          code: s.raw[51],
-          marks: [s.raw[59], s.raw[60], s.raw[61]],
-          cr: s.raw[84],
-          gr: s.raw[85],
-          gp: s.raw[86],
-          cxG: s.raw[87],
-        },
-        paper8: {
-          code: s.raw[52],
-          marks: [
-            s.raw[62],
-            s.raw[63],
-            s.raw[64],
-            s.raw[74],
-            s.raw[75],
-            s.raw[76],
-          ],
-          cr: s.raw[88],
-          gr: s.raw[89],
-          gp: s.raw[90],
-          cxG: s.raw[91],
-        },
-        paper9: {
-          code: s.raw[53],
-          marks: [s.raw[65], s.raw[66], s.raw[67]],
-          cr: s.raw[92],
-          gr: s.raw[93],
-          gp: s.raw[94],
-          cxG: s.raw[95],
-        },
-        paper10: {
-          code: s.raw[54],
-          marks: [
-            s.raw[68],
-            s.raw[69],
-            s.raw[70],
-            s.raw[77],
-            s.raw[78],
-            s.raw[79],
-          ],
-          cr: s.raw[96],
-          gr: s.raw[97],
-          gp: s.raw[98],
-          cxG: s.raw[99],
-        },
-        paper11: {
-          code: s.raw[55],
-          marks: [s.raw[71], s.raw[72], s.raw[73]],
-          cr: s.raw[100],
-          gr: s.raw[101],
-          gp: s.raw[102],
-          cxG: s.raw[103],
-        },
-      },
-    }));
-
-    return groupedData;
   } catch (err) {
-    console.error("Sem1 Extraction Error:", err.message);
-    throw err;
+    throw new Error(`Sem1 Processor Failed: ${err.message}`);
   }
 };
 

@@ -58,7 +58,9 @@ const IsolatedPdfConverter = () => {
 
       if (result.success) {
         setExtractedData(result.data);
-        toast.success(`Successfully extracted ${result.data.length} records for preview`);
+        toast.success(
+          `Successfully extracted ${result.data.length} records for preview`,
+        );
       } else {
         toast.error(result.error || "Extraction failed");
       }
@@ -81,19 +83,21 @@ const IsolatedPdfConverter = () => {
 
     try {
       toast.info("Saving records to database...");
-      
+
       const response = await fetch(
-        "http://localhost:5000/api/students/upload-pdf", 
+        "http://localhost:5000/api/isolated/extract-pdf",
         {
           method: "POST",
           body: formData,
-        }
+        },
       );
 
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.message || result.error || "Failed to save to database");
+        throw new Error(
+          result.message || result.error || "Failed to save to database",
+        );
       }
 
       toast.success(result.message || "Successfully saved to database!");
@@ -206,7 +210,7 @@ const IsolatedPdfConverter = () => {
                 >
                   Download JSON
                 </Button>
-                
+
                 {/* NEW: Save to Database Button */}
                 <Button
                   variant="default"

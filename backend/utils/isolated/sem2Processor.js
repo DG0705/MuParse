@@ -1,16 +1,14 @@
-const pdf = require("pdf-parse"); // ⚠️ use v1.1.1
+const pdfParse = require("pdf-parse");
 
 const extractSem2 = async (buffer) => {
   try {
-    const data = await pdf(buffer);
-    const text = data.text;
+    const parse = typeof pdfParse === "function" ? pdfParse : pdfParse.default;
+    const pdfData = await parse(buffer);
+    const text = pdfData.text;
 
-    // ================= CLEANING =================
     const headerPattern =
       /University of Mumbai, Mumbai[\s\S]+?Paper12\nPaper13\nTotal\nTotal\nCR\nGR\nGP\nC\*G\nCR\nGR\nGP\nC\*G/g;
-
     const footerPattern = /\/ - FEMALE, # - 0\.229A[\s\S]+?10\.00\s+/g;
-
     const noLabelPattern = /^NO$/gm;
 
     let cleanedText = text
@@ -20,93 +18,96 @@ const extractSem2 = async (buffer) => {
       .replace(/\n\s*\n/g, "\n")
       .trim();
 
-    // ================= SPLIT =================
     const blocks = cleanedText
       .split(/(?=\b\d{7}\b)/g)
       .filter((b) => b.trim() !== "");
 
-    // ================= SEQUENTIAL =================
-    const sequentialData = blocks
+    return blocks
       .map((block) => {
         const lines = block
           .split("\n")
           .map((l) => l.trim())
           .filter(Boolean);
+        if (lines.length < 110) return null;
 
-        if (lines.length < 110) {
-          console.warn("⚠️ Skipped block:", lines[0]);
-          return null;
+        const prnValue = lines[26];
+        const rawName = lines[1];
+        const isFemale = rawName.startsWith("/");
+
+        const subjectsMap = {};
+        for (let i = 1; i <= 13; i++) {
+          let mark = "";
+          if (i <= 5) mark = lines[11 + (i - 1) * 3];
+          else if (i <= 11) mark = lines[58 + (i - 6) * 3];
+          else if (i === 12) mark = lines[108];
+          else if (i === 13) mark = lines[111];
+
+          let cr, gr, gp, cxG, code;
+          if (i <= 5) {
+            code = lines[i + 1];
+            const base = 27 + (i - 1) * 4;
+            [cr, gr, gp, cxG] = [
+              lines[base],
+              lines[base + 1],
+              lines[base + 2],
+              lines[base + 3],
+            ];
+          } else if (i <= 11) {
+            code = lines[50 + (i - 6)];
+            const base = 80 + (i - 6) * 4;
+            [cr, gr, gp, cxG] = [
+              lines[base],
+              lines[base + 1],
+              lines[base + 2],
+              lines[base + 3],
+            ];
+          } else if (i === 12) {
+            code = lines[104];
+            [cr, gr, gp, cxG] = [
+              lines[112],
+              lines[113],
+              lines[114],
+              lines[115],
+            ];
+          } else if (i === 13) {
+            code = lines[105];
+          }
+
+          subjectsMap[`paper${i}code`] = code || "";
+          subjectsMap[`paper${i}marks`] = mark || "0";
+
+          if (i !== 13) {
+            subjectsMap[`paper${i}cr`] = cr || "0";
+            subjectsMap[`paper${i}gr`] = gr || "";
+            subjectsMap[`paper${i}gp`] = gp || "0";
+            subjectsMap[`paper${i}cxG`] = cxG || "0";
+          }
         }
 
         return {
-          seatNo: lines[0],
-          name: lines[1],
-          motherName: lines[8],
-          prn: lines[26],
-          college: lines[49],
-
-          resultStatus: lines[7],
-          sgpa: lines[47],
-          grade: lines[48],
-          totalCredits: lines[116],
-          finalCgpa: lines[117],
-          finalGrade: lines[118],
-
-          raw: lines, // 🔥 full access
+          studentMaster: {
+            prn: prnValue,
+            name: isFemale ? rawName.substring(1).trim() : rawName,
+            batch: prnValue ? prnValue.substring(0, 4) : null,
+            gender: isFemale ? "Female" : "Male",
+            motherName: lines[8],
+            category: "Regular",
+          },
+          academicRecord: {
+            prn: prnValue,
+            seatNo: lines[0],
+            semester: 2,
+            sgpi: lines[47] || "0",
+            totalMarks: lines[25] || "0",
+            finalResult: lines[7] || "Unsuccessful",
+            isKT: false,
+            subjects: subjectsMap,
+          },
         };
       })
       .filter(Boolean);
-
-    // ================= GROUPED =================
-    const groupedData = sequentialData.map((s) => {
-      const subjects = {};
-
-      for (let i = 1; i <= 13; i++) {
-        const marks = [
-          s.raw[8 + i * 3], // approx mapping preserved
-          s.raw[9 + i * 3],
-          s.raw[10 + i * 3],
-        ];
-
-        // extra marks for paper 8 & 10
-        if (i === 8 || i === 10) {
-          marks.push(s.raw[74], s.raw[75], s.raw[76]);
-        }
-
-        subjects[`paper${i}`] = {
-          code: s.raw[i + 1],
-          marks: marks.filter(Boolean),
-          cr: s.raw[26 + i * 4 + 1],
-          gr: s.raw[26 + i * 4 + 2],
-          gp: s.raw[26 + i * 4 + 3],
-          cxG: s.raw[26 + i * 4 + 4],
-        };
-      }
-
-      return {
-        studentInfo: {
-          seatNo: s.seatNo,
-          name: s.name,
-          motherName: s.motherName,
-          prn: s.prn,
-          college: s.college,
-        },
-        academicSummary: {
-          status: s.resultStatus,
-          sgpa: s.sgpa,
-          grade: s.grade,
-          totalCredits: s.totalCredits,
-          cgpa: s.finalCgpa,
-          finalGrade: s.finalGrade,
-        },
-        subjects,
-      };
-    });
-
-    return groupedData;
   } catch (err) {
-    console.error("Sem2 Extraction Error:", err.message);
-    throw err;
+    throw new Error(err.message);
   }
 };
 

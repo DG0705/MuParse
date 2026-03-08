@@ -78,7 +78,14 @@ const StudentHistory = () => {
                   <div className="space-y-2">
                     <div className="flex justify-between"><span className="text-muted-foreground">Name:</span><span className="font-medium">{data.profile?.name || "N/A"}</span></div>
                     <div className="flex justify-between"><span className="text-muted-foreground">PRN:</span><span className="font-medium">{data.profile?.prn || "N/A"}</span></div>
-                    <div className="flex justify-between"><span className="text-muted-foreground">Category:</span><Badge variant="outline">{data.profile?.category || "Regular"}</Badge></div>
+                    
+                    {/* UPDATED: Dynamic Badge Color based on Dropper status */}
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Category:</span>
+                      <Badge variant={data.profile?.category === "Dropper" ? "destructive" : "outline"}>
+                        {data.profile?.category || "Regular"}
+                      </Badge>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
