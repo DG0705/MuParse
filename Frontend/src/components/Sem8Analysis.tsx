@@ -11,7 +11,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
-import { useToast } from "@/hooks/use-toast"; // Ensure this is imported
+import { useToast } from "@/hooks/use-toast"; 
 
 // --- Interfaces ---
 export interface StudentData {
@@ -25,11 +25,13 @@ export interface StudentData {
   finalStatus: "Passed" | "Failed";
   [key: string]: any;
 }
+
 export interface TopperEntry {
   name: string;
   marks: number;
   seatNo: string;
 }
+
 interface SubjectStats {
   totalAppeared: number;
   totalPassed: number;
@@ -39,9 +41,11 @@ interface SubjectStats {
   marks60_Above: number;
   teacher: string;
 }
+
 interface AnalysisData {
   [subjectName: string]: SubjectStats;
 }
+
 export interface SummaryData {
   totalStudents: number;
   successful: number;
@@ -219,7 +223,7 @@ const getReportHeader = (title: string) => {
 const useDownloadReport = (
   overallSummaryRef: React.RefObject<HTMLDivElement>,
   subjectAnalysisRef: React.RefObject<HTMLDivElement>,
-  toast: any // Accepting toast function
+  toast: any
 ) => {
   const [isDownloading, setIsDownloading] = useState(false);
 
@@ -347,7 +351,6 @@ const useDownloadReport = (
       pdf.addImage(analysisImgData, "JPEG", 0, 0, pdfWidth, imgHeight);
       pdf.save("Result_Analysis_Combined_Tall_Report.pdf");
       
-      // Success Toast
       toast({
         title: "Success",
         description: "PDF Report generated successfully!",
@@ -355,7 +358,6 @@ const useDownloadReport = (
 
     } catch (error) {
       console.error("Critical error during PDF generation:", error);
-      // REPLACED ALERT WITH TOAST
       toast({
         title: "PDF Generation Failed",
         description: "Could not generate PDF. Please try downloading as PNG.",
@@ -417,7 +419,6 @@ const useDownloadReport = (
       link.click();
       document.body.removeChild(link);
 
-      // Success Toast
       toast({
         title: "Success",
         description: "Image captured successfully!",
@@ -425,7 +426,6 @@ const useDownloadReport = (
 
     } catch (error) {
       console.error(`Error during PNG generation:`, error);
-      // REPLACED ALERT WITH TOAST
       toast({
         title: "PNG Generation Failed",
         description: "Failed to generate PNG. Check console for details.",
@@ -444,7 +444,7 @@ const useDownloadReport = (
 
 // --- Main Component ---
 const Sem8Analysis: React.FC = () => {
-  const { toast } = useToast(); // Initialize toast
+  const { toast } = useToast(); 
   const [parsedData, setParsedData] = useState<StudentData[]>([]);
   const [subjectMapping, setSubjectMapping] = useState<{
     [key: string]: string;
@@ -455,7 +455,6 @@ const Sem8Analysis: React.FC = () => {
   const subjectAnalysisRef = useRef<HTMLDivElement>(null);
   const overallSummaryRef = useRef<HTMLDivElement>(null);
 
-  // Pass toast to the custom hook
   const { downloadPdf, downloadPng, isDownloading } = useDownloadReport(
     overallSummaryRef,
     subjectAnalysisRef,
@@ -467,11 +466,7 @@ const Sem8Analysis: React.FC = () => {
     const fetchStudents = async () => {
       try {
         setLoading(true);
-        // Change semester to 8
-        const res = await fetch(
-          "http://localhost:5000/api/students?semester=8",
-        );
-
+        const res = await fetch("http://localhost:5000/api/students?semester=8");
         if (!res.ok) throw new Error("Failed to fetch data from server");
 
         const json = await res.json();
@@ -479,28 +474,24 @@ const Sem8Analysis: React.FC = () => {
         if (Array.isArray(json) && json.length > 0) {
           // 1. Map Backend Data to Frontend Format
           const mappedData: StudentData[] = json.map((s: any) => ({
-            ...s.subjects, // Spread raw subject columns
+            ...s.subjects, 
             Seat_No: s.seatNo,
             Name: s.name,
-            Result: s.results.finalResult,
-            SGPI: s.results.sgpi,
-            Gender: s.subjects?.Gender || "Unknown",
+            Result: s.results?.finalResult || s.finalResult || "N/A",
+            SGPI: s.results?.sgpi || s.sgpi || "0",
+            Gender: s.gender || s.subjects?.Gender || "Unknown",
             Remark: s.subjects?.Remark || "",
-            // Default finalStatus (will be recalculated in useMemo)
-            finalStatus: s.results.finalResult === "F" ? "Failed" : "Passed",
+            finalStatus: (s.results?.finalResult || s.finalResult) === "F" ? "Failed" : "Passed",
           }));
 
           // 2. Dynamically Determine Subject Mapping
-          // We look at the first student record to find columns ending in "_Total"
           const firstRecord = mappedData[0];
           const headers = Object.keys(firstRecord);
           const dynamicSubjectMapping: { [key: string]: string } = {};
 
           headers.forEach((header) => {
             if (header.endsWith("_Total") && header !== "Grand_Total") {
-              const subjectName = header
-                .replace(/_/g, " ")
-                .replace(" Total", "");
+              const subjectName = header.replace(/_/g, " ").replace(" Total", "");
               dynamicSubjectMapping[header] = subjectName;
             }
           });
@@ -508,14 +499,11 @@ const Sem8Analysis: React.FC = () => {
           setSubjectMapping(dynamicSubjectMapping);
           setParsedData(mappedData);
         } else {
-          // No data found
           setParsedData([]);
         }
       } catch (err: any) {
         console.error(err);
-        setError(
-          "Could not load data. Ensure the backend is running and data is uploaded.",
-        );
+        setError("Could not load data. Ensure the backend is running and data is uploaded.");
       } finally {
         setLoading(false);
       }
@@ -524,6 +512,7 @@ const Sem8Analysis: React.FC = () => {
     fetchStudents();
   }, []);
 
+  // --- Calculation Logic ---
   const summary: SummaryData = useMemo(() => {
     if (parsedData.length === 0) {
       return {
@@ -692,6 +681,7 @@ const Sem8Analysis: React.FC = () => {
 
   const subjectKeysForTable = Object.keys(summary.subjectMapping);
 
+  // --- Render ---
   return (
     <div className="font-serif p-8 max-w-7xl mx-auto my-5 border border-gray-300 shadow-xl bg-white rounded-lg">
       <div className="text-center mb-6 pb-4 border-b border-dashed border-gray-300">

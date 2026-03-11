@@ -1,20 +1,26 @@
 import React, { useState, useMemo } from "react";
 import * as pdfjs from "pdfjs-dist";
+import axios from "axios";
 
-// Remove interface definitions if this is a .js file, 
-// otherwise keep them for TypeScript (.tsx)
+// Interface updated to support both R-19 uppercase keys and NEP lowercase keys
 interface StudentData {
-  Seat_No: string;
-  Name: string;
-  Gender: "Male" | "Female";
-  PRN: string;
-  ABCID: string;
-  Is_Diploma_Student: "Yes" | "No";
-  Result: string;
-  Remark: string;
-  Grand_Total: string;
-  SGPI: string;
-  CGPI: string;
+  Seat_No?: string;
+  seat_no?: string;
+  Name?: string;
+  name?: string;
+  Gender?: "Male" | "Female" | string;
+  gender?: string;
+  PRN?: string;
+  prn?: string;
+  ABCID?: string;
+  Is_Diploma_Student?: "Yes" | "No";
+  Result?: string;
+  result?: string;
+  Remark?: string;
+  Grand_Total?: string;
+  SGPI?: string;
+  sgpi?: string;
+  CGPI?: string;
   SGPI_SEM_I?: string;
   MARKS_SEM_I?: string;
   CREDITS_SEM_I?: string;
@@ -37,7 +43,7 @@ interface StudentData {
   MARKS_SEM_VII?: string;
   CREDITS_SEM_VII?: string;
   TOTAL_MARKS?: string;
-  [key: string]: string | "Male" | "Female" | undefined;
+  [key: string]: any;
 }
 
 const cleanExtractedText = (extractedText: string): string => {
@@ -249,12 +255,12 @@ const generateCsvContent = (students: StudentData[]): string => {
     "TOTAL_MARKS",
   ];
 
-  const allHeaders = new Set<string>(baseHeaders);
+  const baseHeadersSet = new Set<string>(baseHeaders);
   const subjectRelatedHeaders = new Set<string>();
 
   students.forEach((student) => {
     Object.keys(student).forEach((key) => {
-      if (!baseHeaders.includes(key) && !semesterHeaders.includes(key)) {
+      if (!baseHeadersSet.has(key) && !semesterHeaders.includes(key)) {
         subjectRelatedHeaders.add(key);
       }
     });
@@ -285,21 +291,30 @@ const generateCsvContent = (students: StudentData[]): string => {
 };
 
 const PdfResultConverter: React.FC = () => {
+  // --- UI Modes ---
+  const [isNEP, setIsNEP] = useState(false);
+
+  // --- Common States ---
+  const [semester, setSemester] = useState("");
+  const [allStudents, setAllStudents] = useState<StudentData[]>([]);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+
+  // --- R-19 States ---
   const [rawText, setRawText] = useState("");
   const [cleanedText, setCleanedText] = useState("");
-  const [allStudents, setAllStudents] = useState<StudentData[]>([]);
   const [prnFilter, setPrnFilter] = useState("");
-  const [isProcessing, setIsProcessing] = useState(false);
 
-  // --- NEW STATE ---
-  const [semester, setSemester] = useState("");
-  const [isUploading, setIsUploading] = useState(false);
-  // ----------------
+  // --- NEP States ---
+  const [nepFile, setNepFile] = useState<File | null>(null);
 
   useMemo(() => {
     pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.mjs`;
   }, []);
 
+  // =====================================
+  // R-19 CLIENT-SIDE PARSING LOGIC
+  // =====================================
   const handleFileChange = async (
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
@@ -365,14 +380,12 @@ const PdfResultConverter: React.FC = () => {
 
     if (prnsToFilter.length > 0) {
       studentsToExport = allStudents.filter((student) =>
-        prnsToFilter.includes(student.PRN)
+        prnsToFilter.includes(student.PRN || "")
       );
     }
 
     if (studentsToExport.length === 0) {
-      alert(
-        "No students found matching the provided PRNs, or no data available."
-      );
+      alert("No students found matching the provided PRNs, or no data available.");
       return;
     }
 
@@ -386,7 +399,6 @@ const PdfResultConverter: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
-  // --- NEW UPLOAD FUNCTION ---
   const handleUploadToDatabase = async () => {
     if (!semester) {
       alert("Please enter a Semester number before uploading.");
@@ -402,7 +414,7 @@ const PdfResultConverter: React.FC = () => {
 
     if (prnsToFilter.length > 0) {
       studentsToExport = allStudents.filter((student) =>
-        prnsToFilter.includes(student.PRN)
+        prnsToFilter.includes(student.PRN || "")
       );
     }
 
@@ -422,7 +434,6 @@ const PdfResultConverter: React.FC = () => {
     setIsUploading(true);
 
     try {
-      // Ensure this URL matches your backend configuration
       const response = await fetch("http://localhost:5000/api/students/upload-csv", {
         method: "POST",
         body: formData,
@@ -432,6 +443,7 @@ const PdfResultConverter: React.FC = () => {
 
       if (response.ok) {
         alert(`Success! ${result.message}`);
+        if(result.students) setAllStudents(result.students);
       } else {
         alert(`Upload Failed: ${result.message || result.error}`);
       }
@@ -442,118 +454,210 @@ const PdfResultConverter: React.FC = () => {
       setIsUploading(false);
     }
   };
-  // ---------------------------
+
+  // =====================================
+  // NEP DIRECT BACKEND UPLOAD LOGIC
+  // =====================================
+  const handleNepUpload = async () => {
+    if (!nepFile || !semester) {
+      alert("Please select a PDF or CSV file and enter the semester number.");
+      return;
+    }
+    
+    setIsProcessing(true);
+    setAllStudents([]);
+
+    const formData = new FormData();
+    formData.append("file", nepFile);
+    formData.append("semester", semester);
+
+    try {
+      const response = await axios.post("http://localhost:5000/api/students/upload-nep-pdf", formData);
+      alert("Success: " + response.data.message);
+      
+      // Map the NEP backend data directly to the preview table
+      if(response.data.students) {
+        setAllStudents(response.data.students);
+      }
+    } catch (error: any) {
+      alert("NEP Upload Failed: " + (error.response?.data?.error || "Server error"));
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   const hasData = allStudents.length > 0;
 
   return (
     <div className="w-full max-w-4xl mx-auto p-4 space-y-8">
-      <div className="border rounded-lg p-6 space-y-6 bg-white shadow-sm">
-        <div className="space-y-2">
-          <label className="text-sm font-medium">1. Upload PDF File</label>
-          <input
-            type="file"
-            accept=".pdf"
-            onChange={handleFileChange}
-            disabled={isProcessing}
-            onClick={(e) => (e.currentTarget.value = "")}
-            className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-violet-50 file:text-violet-700 hover:file:bg-violet-100"
-          />
-        </div>
-        <div className="space-y-2">
-          <label htmlFor="prn-filter" className="text-sm font-medium">
-            2. (Optional) Filter by PRN Numbers
-          </label>
-          <textarea
-            id="prn-filter"
-            placeholder="Enter PRN numbers, separated by commas or newlines..."
-            value={prnFilter}
-            onChange={(e) => setPrnFilter(e.target.value)}
-            disabled={!hasData || isProcessing}
-            className="w-full p-2 border rounded-md min-h-[80px] font-mono text-xs"
-          />
-        </div>
-        <div className="space-y-2">
-          <label className="text-sm font-medium">
-            3. Download Formatted Data
-          </label>
-          <button
-            onClick={handleDownloadCsv}
-            disabled={!hasData || isProcessing}
-            className="w-full bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-indigo-700 disabled:bg-gray-400"
-          >
-            {isProcessing
-              ? "Processing..."
-              : `Download CSV (${
-                  prnFilter.trim() === "" ? "All" : "Filtered"
-                })`}
-          </button>
-        </div>
+      
+      {/* SCHEME TOGGLE */}
+      <div className="flex bg-gray-100 p-1 rounded-lg w-full max-w-sm mx-auto shadow-inner mb-6">
+        <button 
+          className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${!isNEP ? 'bg-white shadow text-indigo-700' : 'text-gray-500'}`}
+          onClick={() => setIsNEP(false)}
+        >
+          R-19 Converter
+        </button>
+        <button 
+          className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${isNEP ? 'bg-white shadow text-purple-700' : 'text-gray-500'}`}
+          onClick={() => setIsNEP(true)}
+        >
+          NEP 2024 Upload
+        </button>
+      </div>
 
-        {/* --- NEW UPLOAD SECTION --- */}
-        <div className="space-y-2 pt-4 border-t border-gray-200">
-          <label className="text-sm font-medium">4. Upload to Database</label>
-          <div className="flex gap-4">
+      {/* --- R-19 VIEW --- */}
+      {!isNEP && (
+        <div className="border rounded-lg p-6 space-y-6 bg-white shadow-sm border-indigo-100">
+          <h2 className="text-xl font-bold text-indigo-800 border-b pb-2">R-19 Result Processor</h2>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">1. Upload PDF File</label>
             <input
-              type="number"
-              placeholder="Semester (e.g. 1)"
-              value={semester}
-              onChange={(e) => setSemester(e.target.value)}
-              className="p-2 border rounded-md w-32 text-sm"
-              min="1"
-              max="8"
+              type="file"
+              accept=".pdf"
+              onChange={handleFileChange}
+              disabled={isProcessing}
+              onClick={(e) => (e.currentTarget.value = "")}
+              className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
             />
+          </div>
+          <div className="space-y-2">
+            <label htmlFor="prn-filter" className="text-sm font-medium">
+              2. (Optional) Filter by PRN Numbers
+            </label>
+            <textarea
+              id="prn-filter"
+              placeholder="Enter PRN numbers, separated by commas or newlines..."
+              value={prnFilter}
+              onChange={(e) => setPrnFilter(e.target.value)}
+              disabled={!hasData || isProcessing}
+              className="w-full p-2 border rounded-md min-h-[80px] font-mono text-xs"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">
+              3. Download Formatted Data
+            </label>
             <button
-              onClick={handleUploadToDatabase}
-              disabled={!hasData || isProcessing || isUploading}
-              className={`flex-1 text-white font-bold py-2 px-4 rounded-lg transition-colors ${
-                isUploading
-                  ? "bg-gray-400 cursor-not-allowed"
-                  : "bg-green-600 hover:bg-green-700"
-              }`}
+              onClick={handleDownloadCsv}
+              disabled={!hasData || isProcessing}
+              className="w-full bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-indigo-700 disabled:bg-gray-400"
             >
-              {isUploading ? "Uploading..." : "Upload CSV to DB"}
+              {isProcessing
+                ? "Processing..."
+                : `Download CSV (${
+                    prnFilter.trim() === "" ? "All" : "Filtered"
+                  })`}
             </button>
           </div>
-          <p className="text-xs text-gray-500">
-            * Converts extracted data to CSV and saves to MongoDB.
-          </p>
-        </div>
-        {/* ------------------------- */}
-      </div>
 
-      <div className="grid md:grid-cols-2 gap-6">
-        <div className="border rounded-lg p-6 bg-white shadow-sm">
-          <h2 className="text-lg font-semibold mb-4">Raw Extracted Text</h2>
-          <textarea
-            value={rawText}
-            placeholder="Raw text from PDF will appear here..."
-            className="w-full p-2 border rounded-md min-h-[300px] font-mono text-xs"
-            readOnly
-          />
+          <div className="space-y-2 pt-4 border-t border-gray-200">
+            <label className="text-sm font-medium">4. Upload to Database</label>
+            <div className="flex gap-4">
+              <input
+                type="number"
+                placeholder="Semester (e.g. 1)"
+                value={semester}
+                onChange={(e) => setSemester(e.target.value)}
+                className="p-2 border rounded-md w-32 text-sm"
+                min="1"
+                max="8"
+              />
+              <button
+                onClick={handleUploadToDatabase}
+                disabled={!hasData || isProcessing || isUploading}
+                className={`flex-1 text-white font-bold py-2 px-4 rounded-lg transition-colors ${
+                  isUploading
+                    ? "bg-gray-400 cursor-not-allowed"
+                    : "bg-green-600 hover:bg-green-700"
+                }`}
+              >
+                {isUploading ? "Uploading..." : "Upload CSV to DB"}
+              </button>
+            </div>
+            <p className="text-xs text-gray-500">
+              * Converts extracted data to CSV and saves to MongoDB.
+            </p>
+          </div>
         </div>
-        <div className="border rounded-lg p-6 bg-white shadow-sm">
-          <h2 className="text-lg font-semibold mb-4">
-            Cleaned Text for Parsing
-          </h2>
-          <textarea
-            value={cleanedText}
-            placeholder="Cleaned text will appear here..."
-            className="w-full p-2 border rounded-md min-h-[300px] font-mono text-xs"
-            readOnly
-          />
-        </div>
-      </div>
+      )}
 
+      {/* --- NEP VIEW --- */}
+      {isNEP && (
+        <div className="border rounded-lg p-6 space-y-6 bg-white shadow-sm border-purple-100">
+          <h2 className="text-xl font-bold text-purple-800 border-b pb-2">NEP 2024 Direct Database Processor</h2>
+          
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Semester Number</label>
+              <input
+                type="number" 
+                placeholder="Enter Semester (e.g. 1)" 
+                value={semester} 
+                onChange={(e) => setSemester(e.target.value)}
+                className="w-full p-2 border rounded-md text-sm" 
+                min="1" max="8"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Upload NEP Result (CSV or PDF)</label>
+              <input
+                type="file" 
+                accept=".pdf,.csv" 
+                onChange={(e) => setNepFile(e.target.files?.[0] || null)}
+                className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100"
+              />
+            </div>
+
+            <button
+              onClick={handleNepUpload} disabled={isProcessing}
+              className="w-full mt-4 bg-purple-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-purple-700 disabled:bg-gray-400"
+            >
+              {isProcessing ? "Processing & Saving to NEP Database..." : "Upload directly to NEP Database"}
+            </button>
+            <p className="text-xs text-gray-500 mt-2">
+              * CSV files are saved directly. PDF files are routed through the Python extraction engine.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* --- TEXT PREVIEWS (R-19 ONLY) --- */}
+      {!isNEP && (
+        <div className="grid md:grid-cols-2 gap-6">
+          <div className="border rounded-lg p-6 bg-white shadow-sm">
+            <h2 className="text-lg font-semibold mb-4">Raw Extracted Text</h2>
+            <textarea
+              value={rawText}
+              placeholder="Raw text from PDF will appear here..."
+              className="w-full p-2 border rounded-md min-h-[300px] font-mono text-xs"
+              readOnly
+            />
+          </div>
+          <div className="border rounded-lg p-6 bg-white shadow-sm">
+            <h2 className="text-lg font-semibold mb-4">Cleaned Text for Parsing</h2>
+            <textarea
+              value={cleanedText}
+              placeholder="Cleaned text will appear here..."
+              className="w-full p-2 border rounded-md min-h-[300px] font-mono text-xs"
+              readOnly
+            />
+          </div>
+        </div>
+      )}
+
+      {/* --- SHARED DATA PREVIEW TABLE --- */}
       <div className="border rounded-lg p-6 bg-white shadow-sm">
         <h2 className="text-lg font-semibold mb-4">
-          Final Parsed Data Preview ({allStudents.length} students found)
+          Final Parsed Data Preview ({allStudents.length} records active)
         </h2>
         <div className="w-full overflow-x-auto">
           <table className="min-w-full text-sm text-left">
             <thead className="bg-gray-50">
               <tr>
-                {["Seat No", "Name", "PRN", "Result", "SGPI"].map((h) => (
+                {["Seat No", "Name", "PRN / ID", "Result", "SGPI"].map((h) => (
                   <th key={h} className="px-4 py-2 font-medium">
                     {h}
                   </th>
@@ -562,18 +666,18 @@ const PdfResultConverter: React.FC = () => {
             </thead>
             <tbody className="divide-y">
               {hasData ? (
-                allStudents.slice(0, 10).map((s) => (
-                  <tr key={s.Seat_No}>
-                    <td className="px-4 py-2 whitespace-nowrap">{s.Seat_No}</td>
-                    <td className="px-4 py-2">{s.Name}</td>
-                    <td className="px-4 py-2 whitespace-nowrap">{s.PRN}</td>
-                    <td className="px-4 py-2">{s.Result}</td>
-                    <td className="px-4 py-2">{s.SGPI}</td>
+                allStudents.slice(0, 10).map((s, idx) => (
+                  <tr key={s.Seat_No || s.seat_no || idx}>
+                    <td className="px-4 py-2 whitespace-nowrap">{s.Seat_No || s.seat_no || "N/A"}</td>
+                    <td className="px-4 py-2">{s.Name || s.name || "Unknown"}</td>
+                    <td className="px-4 py-2 whitespace-nowrap">{s.PRN || s.prn || "N/A"}</td>
+                    <td className="px-4 py-2">{s.Result || s.result || "N/A"}</td>
+                    <td className="px-4 py-2">{s.SGPI || s.sgpi || "0"}</td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={5} className="h-24 text-center">
+                  <td colSpan={5} className="h-24 text-center text-gray-500">
                     No data to display. Upload a file to begin.
                   </td>
                 </tr>

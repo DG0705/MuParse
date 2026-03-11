@@ -2,8 +2,8 @@ import React, { useState, useMemo, useRef, useEffect } from "react";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import SubjectAnalysisReport from "./SubjectAnalysisReport";
-import { Button } from "@/components/ui/button"; // Assuming you have shadcn UI or similar, else use standard button
-import { useToast } from "@/hooks/use-toast"; // Assuming you have a toast hook
+import { Button } from "@/components/ui/button"; 
+import { useToast } from "@/hooks/use-toast"; 
 
 // --- Interfaces ---
 export interface StudentData {
@@ -71,7 +71,7 @@ const teacherAssignment: { [key: string]: string } = {
   "Basic Elec. Eng.": "Prof. J. M. Desai",
 };
 
-// --- PDF/PNG Download Logic (Kept as provided) ---
+// --- PDF/PNG Download Logic ---
 const getReportHeader = (title: string) => {
   return `
         <div style="text-align: center; margin-bottom: 20px; font-family: 'Times New Roman', serif; padding: 10px;">
@@ -296,43 +296,32 @@ const Sem1Analysis: React.FC = () => {
     subjectAnalysisRef,
   );
 
-  // --- NEW: Fetch Data from Backend ---
+  // --- Fetch Data from Backend ---
   useEffect(() => {
     const fetchStudents = async () => {
       try {
         setLoading(true);
-        // Fetch raw student list for Sem 1
-        const res = await fetch(
-          "http://localhost:5000/api/students?semester=1",
-        );
+        // Fetch combined data from our fixed backend logic
+        const res = await fetch("http://localhost:5000/api/students?semester=1");
         if (!res.ok) throw new Error("Failed to fetch data from server");
 
         const json = await res.json();
 
         // Transform Backend Data (Nested) to Frontend Format (Flat)
         const mappedData: StudentData[] = json.map((s: any) => ({
-          // 1. Spread the 'subjects' object which contains all raw CSV columns (e.g., Eng_Maths_I_Marks)
-          ...s.subjects,
-          // 2. Overwrite specific fields with standardized values from the root of the document
+          ...s.subjects, // All raw subjects
           "Seat No": s.seatNo,
           Name: s.name,
-          Result: s.results.finalResult,
-          SGPI: s.results.sgpi,
-          // Ensure Gender exists. If not in 'subjects', fallback to "Unknown"
-          Gender: s.subjects?.Gender || "Unknown",
+          Result: s.results?.finalResult || s.finalResult || "N/A",
+          SGPI: s.results?.sgpi || s.sgpi || "0",
+          Gender: s.gender || s.subjects?.Gender || "Unknown",
         }));
 
         setParsedData(mappedData);
       } catch (err: any) {
         console.error(err);
-        setError(
-          "Could not load data. Ensure the backend is running and data is uploaded.",
-        );
-        toast({
-          title: "Fetch Error",
-          description: err.message,
-          variant: "destructive",
-        });
+        setError("Could not load data. Ensure the backend is running and data is uploaded.");
+        toast({ title: "Fetch Error", description: err.message, variant: "destructive" });
       } finally {
         setLoading(false);
       }
@@ -341,7 +330,7 @@ const Sem1Analysis: React.FC = () => {
     fetchStudents();
   }, [toast]);
 
-  // --- Calculation Logic (Existing useMemo) ---
+  // --- Calculation Logic ---
   const summary: SummaryData = useMemo(() => {
     if (parsedData.length === 0) {
       return {
@@ -358,7 +347,6 @@ const Sem1Analysis: React.FC = () => {
       } as SummaryData;
     }
 
-    // Existing Analysis Logic...
     const malePassed = parsedData.filter(
       (s) => s.Gender === "Male" && s.Result === "Successful",
     ).length;
@@ -582,7 +570,6 @@ const Sem1Analysis: React.FC = () => {
               </p>
             </section>
 
-            {/* Reuse existing Gender, Toppers, and Subject Toppers Sections (Identical to your provided code) */}
             <section className="gender-analysis-section mb-8">
               <h3 className="bg-gray-100 p-2 pl-4 mt-6 border-l-4 border-blue-700 text-lg font-semibold text-gray-800">
                 GENDER-WISE ANALYSIS
