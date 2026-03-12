@@ -1,6 +1,12 @@
 import sys
-import json
 import os
+import json
+
+# --- THE FIX: Force Python to recognize the current directory for imports ---
+current_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(current_dir)
+
+# Now Python will successfully find your 'src' folder
 from src.pdf_reader import extract_text
 from src.student_detector import detect_students
 from src.student_parser import parse_student
@@ -19,8 +25,9 @@ def main(pdf_path):
         parsed_results = []
         for block in student_blocks:
             student = parse_student(block)
-            # Map subjects to marks as done in your app.py
             marks = student.get("subject_marks", [])
+            
+            # Map subjects to marks dynamically
             subject_data = {}
             for i in range(min(len(subjects), len(marks))):
                 subject_data[subjects[i]] = marks[i]
@@ -31,7 +38,7 @@ def main(pdf_path):
             
             parsed_results.append(student)
 
-        # Output ONLY json to stdout so Node can parse it
+        # Output JSON to stdout for Node.js to capture
         print(json.dumps(parsed_results))
 
     except Exception as e:

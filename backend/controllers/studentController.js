@@ -6,12 +6,11 @@ const StudentMaster = require("../models/StudentMaster");
 const AcademicRecord = require("../models/AcademicRecord");
 const NepAcademicRecord = require("../models/NepAcademicRecord");
 
-// --- NEP PROCESSOR (Handles BOTH direct CSVs and PDFs) ---
+// --- NEP PROCESSOR ---
 const uploadNepPdfData = async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ message: "Upload an NEP file." });
 
-    // Detect if the user uploaded the CSV directly
     const isCSV = req.file.originalname.toLowerCase().endsWith('.csv') || req.file.mimetype === 'text/csv' || req.file.mimetype === 'application/vnd.ms-excel';
 
     if (isCSV) {
@@ -22,10 +21,9 @@ const uploadNepPdfData = async (req, res) => {
 
       data.forEach((s) => {
         const seatNo = s["seat_no"] || s["Seat_No"] || s["Seat No"];
-        if (!seatNo) return; // Skip empty rows
+        if (!seatNo) return; 
 
         const subjects = {};
-        // Map all dynamic sub_ columns to the subjects Map
         const coreFields = ["seat_no", "seat no", "name", "gender", "total_marks", "result", "sgpi", "college_code", "college_name", "prn"];
         Object.keys(s).forEach((key) => {
           if (!coreFields.includes(key.toLowerCase().trim())) {
@@ -33,7 +31,6 @@ const uploadNepPdfData = async (req, res) => {
           }
         });
 
-        // Insert directly into NepAcademicRecord (No StudentMaster/PRN needed)
         nepAcademicOps.push({
           updateOne: {
             filter: { seatNo: seatNo.toString().trim(), semester: req.body.semester || 1 },
@@ -55,11 +52,10 @@ const uploadNepPdfData = async (req, res) => {
       });
 
       if (nepAcademicOps.length > 0) await NepAcademicRecord.bulkWrite(nepAcademicOps);
-
       return res.json({ success: true, message: `NEP CSV Processed. Saved to Dedicated NEP Database.`, students: data });
     }
 
-    // --- FALLBACK TO PYTHON IF A PDF IS UPLOADED ---
+    // --- FALLBACK TO PYTHON ---
     const tempDir = path.join(__dirname, "../../nep_analysis/temp");
     if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
     
@@ -116,7 +112,6 @@ const uploadNepPdfData = async (req, res) => {
         }
 
         if (nepAcademicOps.length > 0) await NepAcademicRecord.bulkWrite(nepAcademicOps);
-
         res.json({ success: true, message: `NEP PDF Processed & Saved to Dedicated NEP Table.`, students });
       } catch (dbError) {
         res.status(500).json({ error: `Database error: ${dbError.message}` });
@@ -231,11 +226,12 @@ const getStudents = async (req, res) => {
   }
 };
 
-// --- MULTI-TABLE SEARCH SYSTEM (R-19 & NEP) ---
+// --- MULTI-TABLE SEARCH SYSTEM (FIXED DEDUPLICATION) ---
 const getStudentHistory = async (req, res) => {
   try {
     const query = req.params.prn;
 
+    // 1. Search R-19 Data
     const r19Matches = await StudentMaster.find({
       $or: [
         { prn: new RegExp(`^${query}$`, "i") },
@@ -243,6 +239,7 @@ const getStudentHistory = async (req, res) => {
       ]
     }).lean();
 
+    // 2. Search NEP Data
     const nepMatchesRaw = await NepAcademicRecord.find({
       $or: [
         { seatNo: new RegExp(`^${query}$`, "i") },
@@ -258,32 +255,50 @@ const getStudentHistory = async (req, res) => {
     });
     const nepMatches = Object.values(uniqueNepStudents);
 
-    const totalMatches = r19Matches.length + nepMatches.length;
+    // 3. COMBINE & DEDUPLICATE (Fixes the duplicate popup bug)
+    const uniqueMatchesMap = new Map();
 
-    if (totalMatches === 0) return res.status(404).json({ message: "No student found with that Name, PRN, or Seat No." });
+    r19Matches.forEach(s => {
+      uniqueMatchesMap.set(s.prn, {
+        name: s.name,
+        prn: s.prn,
+        category: s.status || "Regular",
+        batch: "R-19 Scheme"
+      });
+    });
 
-    if (totalMatches > 1) {
-      const combinedList = [
-        ...r19Matches.map(s => ({ name: s.name, prn: s.prn, category: s.status || "Regular", batch: s.batch || "R-19" })),
-        ...nepMatches.map(s => ({ name: s.name, prn: s.seatNo, category: "Regular", batch: "NEP-2024" }))
-      ];
+    nepMatches.forEach(s => {
+      if (uniqueMatchesMap.has(s.seatNo)) {
+        // If they exist in both databases, label them as NEP priority
+        const existing = uniqueMatchesMap.get(s.seatNo);
+        existing.batch = "NEP 2024 Scheme"; 
+      } else {
+        uniqueMatchesMap.set(s.seatNo, {
+          name: s.name,
+          prn: s.seatNo,
+          category: "Regular",
+          batch: "NEP 2024 Scheme"
+        });
+      }
+    });
+
+    const combinedList = Array.from(uniqueMatchesMap.values());
+
+    if (combinedList.length === 0) return res.status(404).json({ message: "No student found with that Name, PRN, or Seat No." });
+
+    // Handle Multiple Results
+    if (combinedList.length > 1) {
       return res.json({ type: "multiple", count: combinedList.length, students: combinedList });
     }
 
-    let profile = {};
-    let allRecords = [];
+    // --- HANDLE EXACT MATCH (SINGLE STUDENT VIEW) ---
+    const student = combinedList[0];
 
-    if (r19Matches.length === 1) {
-      const student = r19Matches[0];
-      profile = { name: student.name, prn: student.prn, category: student.status || "R-19" };
-      allRecords = await AcademicRecord.find({ prn: student.prn }).lean();
-    } else {
-      const student = nepMatches[0];
-      profile = { name: student.name, prn: student.seatNo, category: "NEP-2024" };
-      allRecords = await NepAcademicRecord.find({ seatNo: student.seatNo }).lean();
-    }
+    // Fetch from both tables just in case they have mixed history
+    const r19Records = await AcademicRecord.find({ prn: student.prn }).lean();
+    const nepRecords = await NepAcademicRecord.find({ seatNo: student.prn }).lean();
 
-    allRecords.sort((a, b) => a.semester - b.semester);
+    const allRecords = [...r19Records, ...nepRecords].sort((a, b) => a.semester - b.semester);
 
     const academicHistory = {};
     let totalKts = 0;
@@ -317,7 +332,12 @@ const getStudentHistory = async (req, res) => {
 
     res.json({
       type: "single",
-      profile: profile,
+      profile: {
+        name: student.name,
+        prn: student.prn,
+        category: student.category,
+        batch: student.batch // Sends the scheme to the UI
+      },
       summary: { totalSemestersAppeared: allRecords.length, ktCount: totalKts },
       academicHistory: academicHistory
     });
