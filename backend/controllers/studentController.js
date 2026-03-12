@@ -226,7 +226,7 @@ const getStudents = async (req, res) => {
   }
 };
 
-// --- MULTI-TABLE SEARCH SYSTEM (FIXED DEDUPLICATION) ---
+// --- MULTI-TABLE SEARCH & DROPPER ENGINE ---
 const getStudentHistory = async (req, res) => {
   try {
     const query = req.params.prn;
@@ -297,7 +297,11 @@ const getStudentHistory = async (req, res) => {
     const allRecords = [...r19Records, ...nepRecords].sort((a, b) => a.semester - b.semester);
 
     const academicHistory = {};
-    let totalKts = 0;
+    
+    // Status Trackers
+    let eseFCount = 0;
+    let otherFCount = 0;
+    let totalKtsUI = 0; // Total KTs tracked for the UI count
 
     allRecords.forEach(record => {
       const semKey = `Semester ${record.semester}`;
@@ -305,11 +309,47 @@ const getStudentHistory = async (req, res) => {
 
       let hasKT = false;
       if (record.subjects) {
-        Object.values(record.subjects).forEach(val => {
-          const mark = String(val).trim().toUpperCase();
-          if (mark === "F" || mark.includes("KT") || mark === "ABS") {
-            hasKT = true;
-            totalKts++;
+        Object.entries(record.subjects).forEach(([key, val]) => {
+          const k = key.toLowerCase().trim();
+          if (k.includes('tot') || k.includes('result') || k.includes('status') || k.includes('remark') || k.includes('sgpi') || k.includes('cgpi') || k.includes('credit')) return;
+          
+          const valStr = String(val).trim().toUpperCase();
+          
+          // Strict check to ensure 'F' is isolated and not part of 'FEMALE' or 'SUCCESSFUL'
+          const isFail = valStr === 'F' || valStr === 'ABS' || valStr === 'KT' || 
+                         (valStr.includes('F') && valStr.length <= 6 && !valStr.includes('FEM'));
+
+          if (isFail) {
+              hasKT = true;
+              totalKtsUI++;
+              
+              // Smart Tokenizer for R-19 Combined Fields (e.g. "32 15F" -> Theory Passed, TW Failed)
+              if (k.includes('th_tw')) {
+                  const parts = valStr.split(/\s+/);
+                  const p0Fail = parts[0] && (parts[0] === 'F' || parts[0].includes('F') || parts[0] === 'ABS' || parts[0] === 'KT');
+                  const p1Fail = parts[1] && (parts[1] === 'F' || parts[1].includes('F') || parts[1] === 'ABS' || parts[1] === 'KT');
+                  
+                  if (p0Fail) eseFCount++;
+                  if (p1Fail) otherFCount++;
+                  if (!p0Fail && !p1Fail) eseFCount++; // Fallback
+                  
+              } else if (k.includes('in_pror')) {
+                  const parts = valStr.split(/\s+/);
+                  const p0Fail = parts[0] && (parts[0] === 'F' || parts[0].includes('F') || parts[0] === 'ABS' || parts[0] === 'KT');
+                  const p1Fail = parts[1] && (parts[1] === 'F' || parts[1].includes('F') || parts[1] === 'ABS' || parts[1] === 'KT');
+                  
+                  if (p0Fail) otherFCount++;
+                  if (p1Fail) otherFCount++;
+                  if (!p0Fail && !p1Fail) otherFCount++; // Fallback
+
+              } else {
+                  // Fallback for single columns
+                  if (k.includes('ia') || k.includes('tw') || k.includes('pr') || k.includes('or') || k.includes('pract') || k.includes('term')) {
+                      otherFCount++;
+                  } else {
+                      eseFCount++;
+                  }
+              }
           }
         });
       }
@@ -326,15 +366,32 @@ const getStudentHistory = async (req, res) => {
       });
     });
 
+    const totalSystemFails = eseFCount + otherFCount;
+
+    // --- DYNAMIC DROPPER LOGIC OVERRIDE ---
+    let finalCategory = student.category || "Regular";
+    
+    // Apply logic ONLY to R-19 students
+    if (student.batch === "R-19 Scheme" || !student.batch?.includes("NEP")) {
+        // Condition 1: ESE F >= 5
+        if (eseFCount >= 5) {
+            finalCategory = "Dropper";
+        } 
+        // Condition 2: Total F >= 10
+        else if (totalSystemFails >= 10) {
+            finalCategory = "Dropper";
+        }
+    }
+
     res.json({
       type: "single",
       profile: {
         name: student.name,
         prn: student.prn,
-        category: student.category,
+        category: finalCategory, // Replaces default status dynamically based on logic
         batch: student.batch
       },
-      summary: { totalSemestersAppeared: allRecords.length, ktCount: totalKts },
+      summary: { totalSemestersAppeared: allRecords.length, ktCount: totalKtsUI },
       academicHistory: academicHistory
     });
 
@@ -351,7 +408,6 @@ const getStudentsByBatch = async (req, res) => {
   } catch (error) { res.status(500).json({ message: error.message }); }
 };
 
-// --- FIX: ROBUST MERGE LOGIC (Avoids Duplicate Key Crashes) ---
 const mergeStudents = async (req, res) => {
   try {
     const { sourcePrn, targetPrn } = req.body;
@@ -369,15 +425,13 @@ const mergeStudents = async (req, res) => {
         });
         
         if (existingTargetSem) {
-            // Collision: Target already has this semester. Delete the temp record so it doesn't crash MongoDB.
             await AcademicRecord.deleteOne({ _id: record._id });
         } else {
-            // Safe to move: Update the PRN
             await AcademicRecord.updateOne({ _id: record._id }, { $set: { prn: targetPrn } });
         }
     }
 
-    // 2. Move NEP Academic Records Safely (just in case)
+    // 2. Move NEP Academic Records Safely
     const sourceNepRecords = await NepAcademicRecord.find({ seatNo: sourcePrn });
     for (const record of sourceNepRecords) {
         const existingTargetSem = await NepAcademicRecord.findOne({ 
@@ -395,10 +449,8 @@ const mergeStudents = async (req, res) => {
     // 3. Handle Master Profile Identity
     const existingTarget = await StudentMaster.findOne({ prn: targetPrn });
     if (existingTarget) {
-        // Target profile exists, delete the temporary master profile
         await StudentMaster.deleteOne({ prn: sourcePrn });
     } else {
-        // Target doesn't exist (e.g., merging into a completely new PRN), rename the temporary profile
         await StudentMaster.updateOne({ prn: sourcePrn }, { $set: { prn: targetPrn } });
     }
 
