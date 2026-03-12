@@ -18,7 +18,8 @@ import axios from "axios";
 // --- Interfaces ---
 interface StudentData {
   type?: "single";
-  profile: { name: string; prn: string; category: string; };
+  // Added 'batch' to receive the scheme type from the backend
+  profile: { name: string; prn: string; category: string; batch?: string; };
   summary: { totalSemestersAppeared: number; ktCount: number; };
   academicHistory: Record<string, SemesterRecord[]>;
 }
@@ -206,7 +207,6 @@ const Home = () => {
       <main className="container mx-auto px-4 py-8 max-w-7xl">
         <Tabs defaultValue="r19" className="w-full">
           
-          {/* --- TOP LEVEL NAVIGATION TABS --- */}
           <TabsList className="grid w-full grid-cols-1 md:grid-cols-4 h-auto p-1 bg-slate-200/50 rounded-xl mb-8">
             <TabsTrigger value="r19" className="py-3 text-base rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm">R-19 Management</TabsTrigger>
             <TabsTrigger value="nep" className="py-3 text-base rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm">NEP 2024</TabsTrigger>
@@ -251,7 +251,6 @@ const Home = () => {
             </div>
           </TabsContent>
 
-
           {/* ==================== 2. NEP TAB ==================== */}
           <TabsContent value="nep" className="animate-in fade-in-50 flex justify-center py-10">
             <Card className="w-full max-w-xl shadow-lg border-2 border-purple-100">
@@ -286,10 +285,8 @@ const Home = () => {
             </Card>
           </TabsContent>
 
-
-          {/* ==================== 3. SEARCH & HISTORY TAB (Original Code) ==================== */}
+          {/* ==================== 3. SEARCH & HISTORY TAB ==================== */}
           <TabsContent value="search" className="animate-in fade-in-50">
-             {/* BATCH SEARCH */}
             <div className="mb-8 max-w-4xl mx-auto">
               <Card className="w-full border-dashed border-2">
                   <CardHeader className="pb-2">
@@ -318,12 +315,11 @@ const Home = () => {
               </Card>
             </div>
 
-            {/* INDIVIDUAL SEARCH */}
             <div className="mb-16 max-w-4xl mx-auto">
               <Card className="w-full shadow-md border-primary/20">
                   <CardContent className="pt-6">
                     <div className="flex gap-4">
-                      <Input placeholder="Search Student Name or PRN..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSearch()} className="text-lg h-12" />
+                      <Input placeholder="Search Student Name or PRN/Seat No..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSearch()} className="text-lg h-12" />
                       <Button onClick={() => handleSearch()} disabled={loading} size="lg" className="h-12 px-8">{loading ? "..." : <><Search className="w-5 h-5 mr-2" /> Search</>}</Button>
                     </div>
                   </CardContent>
@@ -331,7 +327,7 @@ const Home = () => {
 
               {error && <Alert variant="destructive" className="mt-4"><AlertTriangle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
 
-              {/* MULTIPLE MATCHES DIALOG */}
+              {/* MULTIPLE MATCHES DIALOG (WITH SCHEME BADGE ADDED) */}
               <Dialog open={showSelectionDialog} onOpenChange={setShowSelectionDialog}>
                 <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
                   <DialogHeader>
@@ -344,18 +340,25 @@ const Home = () => {
                       const realTarget = multipleMatches.students.find(s => !s.prn.startsWith("TEMP_"));
                       
                       return (
-                        <div key={student.prn || idx} className="flex items-center justify-between p-4 rounded-lg border bg-card hover:bg-muted/50 transition-all">
+                        <div key={student.prn || idx} className="flex items-center justify-between p-4 rounded-lg border bg-card hover:bg-muted/50 transition-all cursor-pointer" onClick={() => { setShowSelectionDialog(false); handleSearch(student.prn); }}>
                           <div className="flex items-center gap-4">
                             <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">{idx + 1}</div>
-                            <div><h4 className="font-bold">{student.name}</h4><p className="text-sm text-muted-foreground font-mono">PRN: {student.prn}</p></div>
+                            <div>
+                              <h4 className="font-bold">{student.name}</h4>
+                              <p className="text-sm text-muted-foreground font-mono mb-1">ID/Seat: {student.prn}</p>
+                              {/* --- ADDED SMALL SCHEME BADGE --- */}
+                              <Badge variant={student.batch?.includes("NEP") ? "default" : "secondary"} className="text-[10px] px-1.5 py-0 h-4">
+                                {student.batch || "R-19 Scheme"}
+                              </Badge>
+                            </div>
                           </div>
                           <div className="flex gap-2">
                             {isTemp && realTarget && (
-                              <Button variant="outline" size="sm" className="text-orange-600 border-orange-200" onClick={() => handleMerge(student.prn, realTarget.prn)}>
+                              <Button variant="outline" size="sm" className="text-orange-600 border-orange-200" onClick={(e) => { e.stopPropagation(); handleMerge(student.prn, realTarget.prn); }}>
                                 <GitMerge className="w-4 h-4 mr-1" /> Merge
                               </Button>
                             )}
-                            <Button size="sm" onClick={() => { setShowSelectionDialog(false); handleSearch(student.prn); }}>View</Button>
+                            <Button size="sm">View</Button>
                           </div>
                         </div>
                     )})}
@@ -367,11 +370,22 @@ const Home = () => {
               {studentData && (
                 <div className="mt-8 space-y-6 animate-in slide-in-from-bottom-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      
+                      {/* MAIN PROFILE CARD (WITH SCHEME BADGE ADDED) */}
                       <Card>
                         <CardHeader className="pb-2 bg-muted/20"><CardTitle className="text-lg">Student Profile</CardTitle></CardHeader>
                         <CardContent className="pt-4 space-y-3">
                           <div className="flex justify-between border-b pb-2"><span className="text-muted-foreground">Name</span><span className="font-semibold">{studentData.profile?.name}</span></div>
-                          <div className="flex justify-between border-b pb-2"><span className="text-muted-foreground">PRN</span><span className="font-mono">{studentData.profile?.prn}</span></div>
+                          <div className="flex justify-between border-b pb-2"><span className="text-muted-foreground">ID / Seat No</span><span className="font-mono">{studentData.profile?.prn}</span></div>
+                          
+                          {/* --- ADDED SCHEME ROW --- */}
+                          <div className="flex justify-between border-b pb-2">
+                            <span className="text-muted-foreground">Scheme</span>
+                            <Badge variant={studentData.profile?.batch?.includes("NEP") ? "default" : "secondary"}>
+                              {studentData.profile?.batch || "R-19 Scheme"}
+                            </Badge>
+                          </div>
+
                           <div className="flex justify-between pt-1"><span className="text-muted-foreground">Status</span><Badge variant="outline">{studentData.profile?.category}</Badge></div>
                         </CardContent>
                       </Card>
@@ -428,7 +442,7 @@ const Home = () => {
                             <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                               {filteredSubjects.map(([subject, marks]) => (
                                 <div key={subject} className={`flex justify-between p-2 rounded border text-sm ${String(marks).trim() === "F" ? "bg-red-50 text-red-700 border-red-200 font-bold" : "bg-background"}`}>
-                                  <span className="truncate pr-2">{subject}</span><span>{marks}</span>
+                                  <span className="truncate pr-2" title={subject}>{subject}</span><span>{marks}</span>
                                 </div>
                               ))}
                             </div>
@@ -440,7 +454,6 @@ const Home = () => {
               )}
             </div>
           </TabsContent>
-
 
           {/* ==================== 4. ANALYSIS TAB ==================== */}
           <TabsContent value="analysis" className="animate-in fade-in-50">
