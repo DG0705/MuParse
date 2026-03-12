@@ -255,7 +255,7 @@ const getStudentHistory = async (req, res) => {
     });
     const nepMatches = Object.values(uniqueNepStudents);
 
-    // 3. COMBINE & DEDUPLICATE (Fixes the duplicate popup bug)
+    // 3. COMBINE & DEDUPLICATE
     const uniqueMatchesMap = new Map();
 
     r19Matches.forEach(s => {
@@ -269,7 +269,6 @@ const getStudentHistory = async (req, res) => {
 
     nepMatches.forEach(s => {
       if (uniqueMatchesMap.has(s.seatNo)) {
-        // If they exist in both databases, label them as NEP priority
         const existing = uniqueMatchesMap.get(s.seatNo);
         existing.batch = "NEP 2024 Scheme"; 
       } else {
@@ -286,15 +285,12 @@ const getStudentHistory = async (req, res) => {
 
     if (combinedList.length === 0) return res.status(404).json({ message: "No student found with that Name, PRN, or Seat No." });
 
-    // Handle Multiple Results
     if (combinedList.length > 1) {
       return res.json({ type: "multiple", count: combinedList.length, students: combinedList });
     }
 
-    // --- HANDLE EXACT MATCH (SINGLE STUDENT VIEW) ---
     const student = combinedList[0];
 
-    // Fetch from both tables just in case they have mixed history
     const r19Records = await AcademicRecord.find({ prn: student.prn }).lean();
     const nepRecords = await NepAcademicRecord.find({ seatNo: student.prn }).lean();
 
@@ -336,7 +332,7 @@ const getStudentHistory = async (req, res) => {
         name: student.name,
         prn: student.prn,
         category: student.category,
-        batch: student.batch // Sends the scheme to the UI
+        batch: student.batch
       },
       summary: { totalSemestersAppeared: allRecords.length, ktCount: totalKts },
       academicHistory: academicHistory
@@ -355,13 +351,62 @@ const getStudentsByBatch = async (req, res) => {
   } catch (error) { res.status(500).json({ message: error.message }); }
 };
 
+// --- FIX: ROBUST MERGE LOGIC (Avoids Duplicate Key Crashes) ---
 const mergeStudents = async (req, res) => {
   try {
     const { sourcePrn, targetPrn } = req.body;
-    await AcademicRecord.updateMany({ prn: sourcePrn }, { $set: { prn: targetPrn } });
-    await StudentMaster.deleteOne({ prn: sourcePrn });
-    res.json({ success: true, message: "Profiles merged successfully" });
-  } catch (error) { res.status(500).json({ message: error.message }); }
+
+    if (!sourcePrn || !targetPrn) {
+      return res.status(400).json({ error: "Missing source or target PRN." });
+    }
+
+    // 1. Move R-19 Academic Records Safely
+    const sourceR19Records = await AcademicRecord.find({ prn: sourcePrn });
+    for (const record of sourceR19Records) {
+        const existingTargetSem = await AcademicRecord.findOne({ 
+            prn: targetPrn, 
+            semester: record.semester 
+        });
+        
+        if (existingTargetSem) {
+            // Collision: Target already has this semester. Delete the temp record so it doesn't crash MongoDB.
+            await AcademicRecord.deleteOne({ _id: record._id });
+        } else {
+            // Safe to move: Update the PRN
+            await AcademicRecord.updateOne({ _id: record._id }, { $set: { prn: targetPrn } });
+        }
+    }
+
+    // 2. Move NEP Academic Records Safely (just in case)
+    const sourceNepRecords = await NepAcademicRecord.find({ seatNo: sourcePrn });
+    for (const record of sourceNepRecords) {
+        const existingTargetSem = await NepAcademicRecord.findOne({ 
+            seatNo: targetPrn, 
+            semester: record.semester 
+        });
+        
+        if (existingTargetSem) {
+            await NepAcademicRecord.deleteOne({ _id: record._id });
+        } else {
+            await NepAcademicRecord.updateOne({ _id: record._id }, { $set: { seatNo: targetPrn } });
+        }
+    }
+
+    // 3. Handle Master Profile Identity
+    const existingTarget = await StudentMaster.findOne({ prn: targetPrn });
+    if (existingTarget) {
+        // Target profile exists, delete the temporary master profile
+        await StudentMaster.deleteOne({ prn: sourcePrn });
+    } else {
+        // Target doesn't exist (e.g., merging into a completely new PRN), rename the temporary profile
+        await StudentMaster.updateOne({ prn: sourcePrn }, { $set: { prn: targetPrn } });
+    }
+
+    res.json({ success: true, message: "Profiles merged successfully!" });
+  } catch (error) { 
+    console.error("Merge error:", error);
+    res.status(500).json({ error: error.message || "Database Merge Error" }); 
+  }
 };
 
 module.exports = { 
