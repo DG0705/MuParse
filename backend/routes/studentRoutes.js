@@ -5,6 +5,7 @@ const router = express.Router();
 const {
   uploadCsvData,
   uploadNepPdfData,
+  uploadAtktCsvData, // <-- Added ATKT Controller
   getStudents,
   getStudentHistory,
   getStudentsByBatch,
@@ -15,12 +16,11 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 // File Upload Routes
 router.post("/upload-csv", upload.single("file"), uploadCsvData);
+router.post("/upload-atkt-csv", upload.single("file"), uploadAtktCsvData); // <-- Added ATKT Route
 router.post("/upload-nep-pdf", upload.single("file"), uploadNepPdfData); 
 
-// Merge Temp Students Route
+// Utility Routes
 router.post("/merge", mergeStudents);
-
-// Data Retrieval Routes
 router.get("/", getStudents);
 router.get("/history/:prn", getStudentHistory);
 router.get("/batch/:batch", getStudentsByBatch);

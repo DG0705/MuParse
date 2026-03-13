@@ -461,9 +461,77 @@ const mergeStudents = async (req, res) => {
   }
 };
 
+
+
+// --- R-19 ATKT SMART PROCESSOR ---
+const uploadAtktCsvData = async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ message: "Upload a CSV file." });
+    const csvString = req.file.buffer.toString();
+    const { data } = Papa.parse(csvString, { header: true, skipEmptyLines: true });
+
+    const semNum = Number(req.body.semester);
+    if (!semNum) return res.status(400).json({ message: "Semester number is required." });
+
+    const academicOps = [];
+
+    data.forEach((s) => {
+      const seatKey = Object.keys(s).find((k) => k.trim() === "Seat No" || k.trim() === "Seat_No");
+      const cleanSeatNo = (seatKey ? s[seatKey] : "").toString().replace(/[^0-9]/g, "");
+      const rawPRN = (s["PRN"] || "").toString().replace(/[^0-9]/g, "");
+      
+      if (!rawPRN) return; // ATKT requires PRN to match the old record
+
+      const flatSubjects = {};
+      const excludedKeys = ["seat no", "seat_no", "prn", "name", "gender", "result", "sgpi", "grand_total", "remark"];
+      Object.keys(s).forEach((key) => {
+        if (!excludedKeys.includes(key.toLowerCase().trim())) flatSubjects[key] = s[key];
+      });
+
+      // Build dotted update object so we don't wipe out existing passed subjects
+      const updateFields = {
+        sgpi: s["SGPI"] || "0", 
+        finalResult: s["Result"] || "N/A",
+        seatNo: cleanSeatNo // Updates their seat number to the latest ATKT seat number
+      };
+
+      Object.entries(flatSubjects).forEach(([key, val]) => {
+         // Only update if there is an actual mark inside the column
+         if (val && val.toString().trim() !== "") {
+             updateFields[`subjects.${key}`] = val;
+         }
+      });
+
+      academicOps.push({
+        updateOne: {
+          filter: { prn: rawPRN, semester: semNum },
+          update: { $set: updateFields },
+          upsert: true // Creates it if the regular result wasn't uploaded first
+        },
+      });
+    });
+
+    if (academicOps.length > 0) {
+        const dbResult = await AcademicRecord.bulkWrite(academicOps);
+        res.status(200).json({ 
+          success: true,
+          message: `ATKT Processed! Smart Updated ${dbResult.modifiedCount} records & Inserted ${dbResult.upsertedCount}.`,
+          students: data.map((s) => ({
+            seat_no: s["Seat No"] || s["Seat_No"], name: s["Name"], prn: s["PRN"], result: s["Result"], sgpi: s["SGPI"],
+          }))
+        });
+    } else {
+        res.status(400).json({ error: "No valid ATKT records with PRNs found." });
+    }
+  } catch (error) { res.status(500).json({ error: error.message }); }
+};
+
+
+
 module.exports = { 
     uploadCsvData, 
     uploadNepPdfData,
+    uploadAtktCsvData, 
     getStudents, 
     getStudentHistory,
     getStudentsByBatch,

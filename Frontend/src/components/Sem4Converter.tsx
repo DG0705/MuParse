@@ -22,7 +22,6 @@ const SUBJECT_RULES: { name: string; components: string[]; shortName: string }[]
 
 const EXPECTED_COMPONENT_COUNT = 31;
 
-// --- Helper Data Structures for Analysis ---
 interface SubjectStats {
   totalAppeared: number;
   totalPassed: number;
@@ -168,6 +167,12 @@ export const Sem4Converter: React.FC<SimplePdfConverterProps> = ({
   const [analysisData, setAnalysisData] = useState<AnalysisData | null>(null);
   const [studentRecords, setStudentRecords] = useState<RawStudentRecord[]>([]);
 
+  // --- NEW ATKT STATE ---
+  const semester = "4";
+  const [isATKT, setIsATKT] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  // ----------------------
+
   useMemo(() => {
     pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.mjs`;
   }, []);
@@ -250,7 +255,6 @@ export const Sem4Converter: React.FC<SimplePdfConverterProps> = ({
   const parseTextToStructuredData = (text: string): { headers: string[]; rows: string[][]; records: RawStudentRecord[] } => {
     const records: RawStudentRecord[] = [];
     
-    // 1. Pre-process to remove footer "noise" that prevents the regex from seeing the end of the last student
     const noisePatterns = [
         /MARKS\s+>=80[\s\S]*?GRADE POINT\s*:\s*\d+/g,
         /Result Sheet for S\.E\.[\s\S]*?May 2025/g,
@@ -263,11 +267,7 @@ export const Sem4Converter: React.FC<SimplePdfConverterProps> = ({
         cleanedText = cleanedText.replace(pattern, '');
     });
 
-    // 2. UPDATED REGEX:
-    // - Marks[A-Z]? catches "Marks", "MarksO", and "MarksD"
-    // - Lookahead ensured it stops at the next ID or the very end of the string
-   const studentBlockRegex =
-/(\d{5,10})\s*Marks[A-Z]?\s*([\s\S]*?)\s*Grade\s*([\s\S]*?)(?=\d{5,10}\s*Marks[A-Z]?|$)/g;
+   const studentBlockRegex = /(\d{5,10})\s*Marks[A-Z]?\s*([\s\S]*?)\s*Grade\s*([\s\S]*?)(?=\d{5,10}\s*Marks[A-Z]?|$)/g;
 
     let match;
     while ((match = studentBlockRegex.exec(cleanedText)) !== null) {
@@ -282,10 +282,9 @@ export const Sem4Converter: React.FC<SimplePdfConverterProps> = ({
         const gradeTokens = gradeAndMetadataBlock.match(/\b[A-Z]\b|(?:\s|^)[A-Z](?=\s|$)/g) || [];
         const subjectGrades = gradeTokens.slice(0, EXPECTED_COMPONENT_COUNT);
         
-        // --- IMPROVED NAME EXTRACTION ---
         let name = 'N/A';
         const potentialNameParts = gradeAndMetadataBlock
-            .replace(/\b[A-Z]\b/g, '') // Remove single character grades
+            .replace(/\b[A-Z]\b/g, '')
             .replace(/(?:GP\*?C|GPC|GPA|SGPI|RESULT|TOTAL|Marks[A-Z]?|Grade)/gi, '') 
             .match(/[A-Z\/\s]{5,}/g); 
 
@@ -296,7 +295,6 @@ export const Sem4Converter: React.FC<SimplePdfConverterProps> = ({
                 .trim();
         }
 
-        // --- RESULT & SGPA ---
         let sgpa = 'N/A';
         let finalResult = 'N/A';
         const resultMatch = gradeAndMetadataBlock.match(/([\d\.]+)\s+([PF])\s*$/);
@@ -326,7 +324,7 @@ export const Sem4Converter: React.FC<SimplePdfConverterProps> = ({
     
     const rows = records.map(record => FINAL_HEADERS.map(header => record[header] || 'N/A'));
     return { headers: FINAL_HEADERS, rows, records };
-};
+  };
 
   const onDownloadCsv = () => {
     if (!extractedText) {
@@ -352,6 +350,7 @@ export const Sem4Converter: React.FC<SimplePdfConverterProps> = ({
 
   const hasData = extractedText.length > 0;
 
+  // --- NEW: UPLOAD TO DATABASE FUNCTION (WITH ATKT) ---
   const uploadToBackend = async () => {
     if (!extractedText) {
       toast({ title: "No Data", description: "Please upload a PDF file first.", variant: "destructive" });
@@ -378,31 +377,35 @@ export const Sem4Converter: React.FC<SimplePdfConverterProps> = ({
 
     const formData = new FormData();
     formData.append("file", file);
-    formData.append("semester", "4"); 
+    formData.append("semester", semester); 
 
-    setIsLoading(true);
+    setIsUploading(true);
     try {
-      const res = await fetch("http://localhost:5000/api/students/upload-csv", { method: "POST", body: formData });
+      const endpoint = isATKT 
+          ? "http://localhost:5000/api/students/upload-atkt-csv" 
+          : "http://localhost:5000/api/students/upload-csv";
+
+      const res = await fetch(endpoint, { method: "POST", body: formData });
       const json = await res.json();
       
       if (res.ok) {
         toast({ title: "Success", description: "Data stored in Database! You can now view analysis." });
       } else {
-        toast({ title: "Upload Failed", description: json.message || "Unknown error occurred", variant: "destructive" });
+        toast({ title: "Upload Failed", description: json.message || json.error || "Unknown error occurred", variant: "destructive" });
       }
     } catch (err) {
       console.error(err);
       toast({ title: "Connection Error", description: "Is the backend server running on port 5000?", variant: "destructive" });
     } finally {
-      setIsLoading(false);
+      setIsUploading(false);
     }
   };
 
   return (
     <div className="w-full space-y-6">
-      <Card className="p-6 space-y-6">
+      <Card className={`p-6 space-y-6 transition-all duration-300 ${isATKT ? 'border-2 border-orange-300' : ''}`}>
         <div className="space-y-2">
-          <h2 className="text-xl font-semibold">{title}</h2>
+          <h2 className={`text-xl font-semibold ${isATKT ? 'text-orange-700' : ''}`}>{title} {isATKT && "(ATKT Mode)"}</h2>
           <p className="text-sm text-muted-foreground">{description}</p>
         </div>
 
@@ -418,6 +421,7 @@ export const Sem4Converter: React.FC<SimplePdfConverterProps> = ({
               onChange={(e) => handleFile(e.target.files?.[0] || null)}
               disabled={isLoading}
               onClick={(e) => (e.currentTarget.value = "")}
+              className={isATKT ? "bg-orange-50" : ""}
             />
           </div>
         </div>
@@ -425,12 +429,29 @@ export const Sem4Converter: React.FC<SimplePdfConverterProps> = ({
         <Button variant="default" className="w-full" onClick={onDownloadCsv} disabled={!hasData || isLoading}>
             <FileSpreadsheet className="w-4 h-4 mr-2" />
             {isLoading ? "Processing..." : "Download CSV"}
-          </Button>
+        </Button>
 
-          <Button variant="secondary" className="w-full mt-2" onClick={uploadToBackend} disabled={!hasData || isLoading}>
-            <BarChart3 className="w-4 h-4 mr-2" />
-            Upload to Database & Analyze
+        {/* --- ADDED ATKT CHECKBOX --- */}
+        <div className="pt-4 border-t space-y-4">
+          <div className="flex items-center space-x-2 bg-gray-50 p-3 rounded-lg border border-gray-200">
+            <input 
+              type="checkbox" id={`isAtkt${semester}`} 
+              checked={isATKT} onChange={(e) => setIsATKT(e.target.checked)} 
+              className="w-5 h-5 text-indigo-600 rounded cursor-pointer"
+            />
+            <label htmlFor={`isAtkt${semester}`} className="text-sm font-bold text-gray-700 cursor-pointer select-none">
+              This is an ATKT Result (Smartly updates existing records)
+            </label>
+          </div>
+
+          <Button 
+            className={`w-full mt-2 ${isATKT ? 'bg-orange-600 hover:bg-orange-700' : 'bg-green-600 hover:bg-green-700'}`} 
+            onClick={uploadToBackend} disabled={!hasData || isLoading || isUploading}
+          >
+            <Database className="w-4 h-4 mr-2" />
+            {isUploading ? "Uploading..." : `Upload ${isATKT ? 'ATKT' : 'CSV'} to DB`}
           </Button>
+        </div>
 
         {hasData && (
           <div className="pt-4 border-t">
@@ -445,7 +466,7 @@ export const Sem4Converter: React.FC<SimplePdfConverterProps> = ({
         <Card className="p-6 space-y-4">
             <div className="flex items-center gap-2">
                 <BarChart3 className="w-5 h-5" />
-                <h3 className="text-lg font-semibold">Semester 3 Result Analysis</h3>
+                <h3 className="text-lg font-semibold">Semester {semester} Result Analysis</h3>
             </div>
             <SubjectAnalysisReport analysisData={analysisData} />
         </Card>

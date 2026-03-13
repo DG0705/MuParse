@@ -1,433 +1,360 @@
-import React, { useMemo, useState } from "react";
+import React, { useState, useMemo } from "react";
 import * as pdfjs from "pdfjs-dist";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card } from "@/components/ui/card";
-import { useToast } from "@/hooks/use-toast";
-import { FileSpreadsheet, Upload, BarChart3, Database } from "lucide-react";
-import SubjectAnalysisReport from "./SubjectAnalysisReport";
 
-// --- 1. Define Data Structures and Subject Rules ---
-const SUBJECT_RULES: { name: string; components: string[]; shortName: string }[] = [
-    { name: "ENGINEERING MATHEMATICS - III", components: ["ESE", "IA", "TOT", "TW"], shortName: "ENGG MATHS - III" },
-    { name: "DATA STRUCTURE AND ANALYSIS", components: ["ESE", "IA", "TOT"], shortName: "DSA" },
-    { name: "DATABASE MANAGEMENT SYSTEM", components: ["ESE", "IA", "TOT"], shortName: "DBMS" },
-    { name: "PRINCIPLE OF COMMUNICATION", components: ["ESE", "IA", "TOT"], shortName: "POC" },
-    { name: "PARADIGMS AND COMPUTER PROGRAMMING FUNDAMENTALS", components: ["ESE", "IA", "TOT"], shortName: "PARADIGMS & CPF" },
-    { name: "DATA STRUCTURE LAB", components: ["PR OR", "TW", "TOT"], shortName: "DATA STRUCTURE LAB" },
-    { name: "SQL LAB", components: ["PR OR", "TW", "TOT"], shortName: "SQL LAB" },
-    { name: "COMPUTER PROGRAMMING PARADIGMS LAB", components: ["PR OR", "TW", "TOT"], shortName: "COMP PROG PARADIGMS LAB" },
-    { name: "JAVA LAB (SBL)", components: ["PR OR", "TW", "TOT"], shortName: "JAVA LAB (SBL)" },
-    { name: "MINI PROJECT - 1A FOR FRONT END / BACKEND APPLICATION USING JAVA", components: ["PR OR", "TW", "TOT"], shortName: "MINI PROJECT - 1A" },
-];
-
-const EXPECTED_COMPONENT_COUNT = 31;
-
-// --- Helper Data Structures for Analysis ---
-interface SubjectStats {
-  totalAppeared: number;
-  totalPassed: number;
-  passPercentage: string;
-  marks40_50: number;
-  marks51_59: number;
-  marks60_Above: number;
-  teacher: string;
+interface StudentData {
+  Seat_No?: string; seat_no?: string;
+  Name?: string; name?: string;
+  Gender?: string; gender?: string;
+  PRN?: string; prn?: string;
+  ABCID?: string; Is_Diploma_Student?: string;
+  Result?: string; result?: string;
+  Remark?: string; Grand_Total?: string;
+  SGPI?: string; sgpi?: string;
+  CGPI?: string; TOTAL_MARKS?: string;
+  [key: string]: any;
 }
 
-interface AnalysisData {
-  [subjectName: string]: SubjectStats;
-}
-
-// --- Headers Generation ---
-const MARK_HEADERS: string[] = [];
-const GRADE_HEADERS: string[] = [];
-const TOT_INDICES: { subjectName: string; markIndex: number; gradeIndex: number }[] = [];
-let currentIndex = 0;
-
-SUBJECT_RULES.forEach(sub => {
-    sub.components.forEach((comp) => {
-        // Sanitize headers for Database Compatibility
-        const safeShortName = sub.shortName
-            .replace(/\./g, "")       
-            .replace(/\s+/g, "_")     
-            .replace(/-/g, "_")       
-            .replace(/&/g, "and")     
-            .replace(/_+/g, "_");     
-        
-        const fullMarkHeader = `${safeShortName}_${comp}_Marks`;
-        const fullGradeHeader = `${safeShortName}_${comp}_Grade`;
-        
-        MARK_HEADERS.push(fullMarkHeader);
-        GRADE_HEADERS.push(fullGradeHeader);
-
-        if (comp === 'TOT') {
-            TOT_INDICES.push({
-                subjectName: sub.name,
-                markIndex: currentIndex, 
-                gradeIndex: currentIndex, 
-            });
-        }
-        currentIndex++;
-    });
-});
-
-const FINAL_HEADERS: string[] = [
-    "Seat No",
-    "Name",
-    ...MARK_HEADERS,
-    ...GRADE_HEADERS,
-    "Total Marks",
-    "SGPA",
-    "Final Result",
-];
-
-interface RawStudentRecord {
-    'Seat No': string;
-    'Name': string;
-    'Total Marks': string;
-    'SGPA': string;
-    'Final Result': string;
-    [key: string]: string;
-}
-
-const download = (filename: string, content: string, mimeType: string) => {
-  const blob = new Blob([content], { type: mimeType });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
+const cleanExtractedText = (extractedText: string): string => {
+  const lines = extractedText.split("\n");
+  const unwantedPatterns = [
+    /^Page No\./i, /UNIVERSITY OF MUMBAI/i, /RESULT DATE/i, /COLLEGE\/CENTRE NAME/i,
+    /OFFICE REGISTER FOR THE/i, /EXAMINATION HELD IN/i, /SEAT_NO NAME/,
+    /Th\(\d+\/\d+\)/, /In\(\d+\/\d+\)/, /Total/, /C G GP/, /^\s*\/- FEMALE/i,
+    /^\s*RPV/i, /NULL & VOID/i, /MARKS CARRIED FORWARD/i, /^G:/, /^\s*~/, /^\s*@/,
+    /^\s*#/, /RR- Reserved/, /Grade \/ Gr\. Pt\./, /% Marks/,
+  ];
+  const cleanedLines = lines.filter((line) => {
+    const trimmedLine = line.trim();
+    if (trimmedLine === "" || trimmedLine.startsWith("---")) return false;
+    return !unwantedPatterns.some((pattern) => pattern.test(trimmedLine));
+  });
+  return cleanedLines.join("\n");
 };
 
-// --- 2. Result Analysis Function ---
-const analyzeStudentRecords = (records: RawStudentRecord[]): AnalysisData => {
-    const initialStats: AnalysisData = {};
-
-    TOT_INDICES.forEach(item => {
-        initialStats[item.subjectName] = {
-            totalAppeared: 0,
-            totalPassed: 0,
-            passPercentage: "0.00%",
-            marks40_50: 0,
-            marks51_59: 0,
-            marks60_Above: 0,
-            teacher: "N/A (Provide Teacher Data Separately)",
-        };
-    });
-
-    records.forEach(record => {
-        TOT_INDICES.forEach(item => {
-            const subjectStats = initialStats[item.subjectName];
-            if (!subjectStats) return;
-
-            // Only count if the subject exists in the record
-            const markHeader = MARK_HEADERS[item.markIndex];
-            if(record[markHeader] === undefined) return;
-
-            subjectStats.totalAppeared++;
-            
-            const gradeHeader = GRADE_HEADERS[item.gradeIndex];
-            const totMarkStr = record[markHeader] || "0";
-            const totGrade = record[gradeHeader] || "F";
-
-            const totMarkNum = parseInt(totMarkStr.replace(/\+/g, '').trim(), 10);
-            const isPassed = !isNaN(totMarkNum) && totGrade !== 'F';
-
-            if (isPassed) {
-                subjectStats.totalPassed++;
-                if (totMarkNum >= 60) {
-                    subjectStats.marks60_Above++;
-                } else if (totMarkNum >= 51 && totMarkNum <= 59) {
-                    subjectStats.marks51_59++;
-                } else if (totMarkNum >= 40 && totMarkNum <= 50) {
-                    subjectStats.marks40_50++;
-                }
-            }
-        });
-    });
-
-    Object.keys(initialStats).forEach(subjectName => {
-        const stats = initialStats[subjectName];
-        if (stats.totalAppeared > 0) {
-            const percentage = (stats.totalPassed / stats.totalAppeared) * 100;
-            stats.passPercentage = percentage.toFixed(2) + "%";
-        }
-    });
-
-    return initialStats;
+const parseMarksLine = (line: string): string[] => {
+  if (!line) return [];
+  const parts = line.trim().match(/\S+/g) || [];
+  const result: string[] = [];
+  let i = 0;
+  while (i < parts.length) {
+    const currentPart = parts[i];
+    const nextPart = parts[i + 1];
+    if (nextPart === "*" || nextPart === "+") {
+      result.push(`${currentPart} ${nextPart}`);
+      i += 2;
+    } else {
+      result.push(currentPart);
+      i += 1;
+    }
+  }
+  return result;
 };
 
-interface SimplePdfConverterProps {
-  title: string;
-  description: string;
-}
+const parseStudentBlock = (block: string, activeSubjects: string[]): StudentData | null => {
+  const lines = block.trim().split(/\r?\n/).filter((line) => line.trim() !== "");
+  if (lines.length < 5 || activeSubjects.length === 0) return null;
 
-export const Sem3Converter: React.FC<SimplePdfConverterProps> = ({ title, description }) => {
-  const { toast } = useToast();
-  const [extractedText, setExtractedText] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [analysisData, setAnalysisData] = useState<AnalysisData | null>(null);
-  const [studentRecords, setStudentRecords] = useState<RawStudentRecord[]>([]);
+  const data: Partial<StudentData> = {};
+  data.Is_Diploma_Student = /\(\s*DIPLOMA\s*STUDENT\s*\)/i.test(block) ? "Yes" : "No";
 
-  useMemo(() => {
-    pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.mjs`;
-  }, []);
+  const infoLine = lines[0].trim();
+  const infoMatch = infoLine.match(/^(\d{7})\s*(.*?)\s*\((\d+)\)\s*\((\d+)\)$/);
+  if (!infoMatch) return null;
 
-  const handleFile = async (file?: File | null) => {
-    if (!file) return;
-    if (file.type !== "application/pdf") {
-      toast({ title: "Invalid File Type", description: "Please upload a PDF.", variant: "destructive" });
-      return;
+  data.Seat_No = infoMatch[1];
+  data.PRN = infoMatch[3];
+  data.ABCID = infoMatch[4];
+
+  const rawName = infoMatch[2].trim();
+  if (rawName.startsWith("/")) {
+    data.Gender = "Female"; data.Name = rawName.substring(1).trim();
+  } else {
+    data.Gender = "Male"; data.Name = rawName;
+  }
+
+  const thTwMarks = parseMarksLine(lines[1]);
+  const inPrOrLineParts = parseMarksLine(lines[2]);
+  const courseTotals = parseMarksLine(lines[3]);
+  const sgpiLineParts = lines[4].trim().split(/\s+/);
+
+  activeSubjects.forEach((subjectName, i) => {
+    if (i < courseTotals.length) {
+      data[`${subjectName}_Th_Tw`] = thTwMarks[i] || "";
+      data[`${subjectName}_In_PrOr`] = inPrOrLineParts[i] || "";
+      data[`${subjectName}_Total`] = courseTotals[i] || "";
+    }
+  });
+
+  const resultParts = inPrOrLineParts.slice(activeSubjects.length);
+  data.Grand_Total = resultParts.pop() || "";
+  data.Result = resultParts.shift() || "";
+  data.Remark = resultParts.join(" ");
+  data.SGPI = sgpiLineParts[sgpiLineParts.length - 1];
+  data.CGPI = "";
+
+  lines.slice(5).forEach((line) => {
+    const trimmedLine = line.trim();
+    const cgpiMatch = trimmedLine.match(/CGPI:\s*([0-9.\s@]+)/);
+    if (cgpiMatch) data.CGPI = cgpiMatch[1].trim();
+    if (trimmedLine.includes("SGPI:")) {
+      const sgpiMatches = trimmedLine.matchAll(/SEM-([IVX]+):\s*([0-9.-]+)/g);
+      for (const match of sgpiMatches) data[`SGPI_SEM_${match[1]}`] = match[2];
+    }
+  });
+
+  return data as StudentData;
+};
+
+const parseAllStudentsWithContext = (text: string): StudentData[] => {
+  const allStudents: StudentData[] = [];
+  let currentSubjects: string[] = [];
+  const chunks = text.split(/(?=^\s*\d{7}\s)/m);
+
+  for (const chunk of chunks) {
+    const trimmedChunk = chunk.trim();
+    if (!trimmedChunk) continue;
+
+    const subjectLineRegex = /\d{2}\.\s+[A-Z0-9]+\s+/;
+    if (subjectLineRegex.test(trimmedChunk)) {
+      const subjectMatches = [...trimmedChunk.matchAll(/\d{2}\.\s+[A-Z0-9]+\s+(.*?)(?=\s+\d{2}\.|$)/g)];
+      if (subjectMatches.length > 0) {
+        currentSubjects = subjectMatches.map((match) => match[1].trim().replace(/\s+/g, " "));
+      }
     }
 
-    setIsLoading(true);
-    setExtractedText("");
-    setAnalysisData(null);
-    setStudentRecords([]);
+    if (/^\d{7}/.test(trimmedChunk)) {
+      const student = parseStudentBlock(trimmedChunk, currentSubjects);
+      if (student) allStudents.push(student);
+    }
+  }
+  return allStudents;
+};
+
+const generateCsvContent = (students: StudentData[]): string => {
+  if (students.length === 0) return "";
+  const baseHeaders = ["Seat_No", "Name", "Gender", "PRN", "ABCID", "Is_Diploma_Student", "Result", "Remark", "Grand_Total", "SGPI", "CGPI"];
+  const subjectRelatedHeaders = new Set<string>();
+
+  students.forEach((student) => {
+    Object.keys(student).forEach((key) => {
+      if (!baseHeaders.includes(key) && !key.startsWith("SGPI_SEM_")) subjectRelatedHeaders.add(key);
+    });
+  });
+
+  const finalHeaders = [...baseHeaders, ...Array.from(subjectRelatedHeaders).sort()];
+  const csvRows = [finalHeaders.join(",")];
+
+  students.forEach((studentData) => {
+    const csvRow = finalHeaders.map((headerKey) => {
+      const value = String(studentData[headerKey] || "").replace(/"/g, '""');
+      if (["Seat_No", "PRN", "ABCID"].includes(headerKey)) return `"=""${value}"""`;
+      return `"${value}"`;
+    });
+    csvRows.push(csvRow.join(","));
+  });
+
+  return csvRows.join("\n");
+};
+
+export const Sem3Converter: React.FC = () => {
+  const [rawText, setRawText] = useState("");
+  const [cleanedText, setCleanedText] = useState("");
+  const [allStudents, setAllStudents] = useState<StudentData[]>([]);
+  const [prnFilter, setPrnFilter] = useState("");
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  // --- ONLY CHANGE THESE TWO LINES FOR SEM 4, 5, 6, 7 ---
+  const semester = "3"; 
+  // ------------------------------------------------------
+  
+  const [isUploading, setIsUploading] = useState(false);
+  const [isATKT, setIsATKT] = useState(false);
+
+  useMemo(() => {
+    pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.mjs`;
+  }, []);
+
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setIsProcessing(true);
+    setRawText(""); setCleanedText(""); setAllStudents([]); setPrnFilter("");
 
     try {
-      toast({ title: "Processing PDF", description: "Extracting text..." });
       const arrayBuffer = await file.arrayBuffer();
       const pdf = await pdfjs.getDocument(arrayBuffer).promise;
-      
-      let fullText = "";
+      let extractedText = "";
+
       for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
         const textContent = await page.getTextContent();
-        const textItems = textContent.items.filter((item) => "str" in item) as any[];
-        
-        textItems.sort((a, b) => {
-          if (Math.abs(a.transform[5] - b.transform[5]) > 5) return b.transform[5] - a.transform[5];
-          return a.transform[4] - b.transform[4];
-        });
-        
-        let pageText = "";
-        let lastItem: any = null;
+        const textItems = textContent.items.filter((item): item is import("pdfjs-dist/types/src/display/api").TextItem => "str" in item);
+
+        let lines: { [y: number]: string[] } = {};
         for (const item of textItems) {
-          if (lastItem) {
-            if (Math.abs(item.transform[5] - lastItem.transform[5]) > 5) {
-              pageText += "\n";
-            } else {
-              const lastItemEndX = lastItem.transform[4] + lastItem.width;
-              if (item.transform[4] > lastItemEndX + 1) pageText += "\t";
-            }
-          }
-          pageText += item.str;
-          lastItem = item;
+          const y = Math.round(item.transform[5]);
+          if (!lines[y]) lines[y] = [];
+          lines[y].push(item.str);
         }
-        fullText += pageText + "\n\n";
+        const sortedY = Object.keys(lines).map(parseFloat).sort((a, b) => b - a);
+        for (const y of sortedY) extractedText += lines[y].join(" ") + "\n";
+        extractedText += "\n\n";
       }
 
-      setExtractedText(fullText);
-      
-      // Parse Logic
-      const { records } = parseTextToStructuredData(fullText);
-      setStudentRecords(records);
-      
-      toast({ title: "PDF Parsed", description: "Preview loaded. Click 'Upload to Database' to analyze." });
+      setRawText(extractedText);
+      const textAfterCleaning = cleanExtractedText(extractedText);
+      setCleanedText(textAfterCleaning);
 
+      const results = parseAllStudentsWithContext(textAfterCleaning);
+      setAllStudents(results);
     } catch (error) {
-      console.error(error);
-      toast({ title: "Error", description: "Could not process PDF.", variant: "destructive" });
+      alert("An error occurred during PDF processing.");
     } finally {
-      setIsLoading(false);
+      setIsProcessing(false);
     }
   };
-const parseTextToStructuredData = (text: string): { headers: string[]; rows: string[][]; records: RawStudentRecord[] } => {
-    const records: RawStudentRecord[] = [];
-    
-    const noisePatterns = [
-        /MARKS\s+>=80[\s\S]*?GRADE POINT\s*:\s*\d+/g,
-        /Result Sheet for S\.E\.[\s\S]*?May 2025/g,
-        /PREPARED BY[\s\S]*?Page \d of \d/g,
-        /Courses →[\s\S]*?MinM[\s\S]*?10/g 
-    ];
-    
-    let cleanedText = text;
-    noisePatterns.forEach(pattern => {
-        cleanedText = cleanedText.replace(pattern, '');
-    });
 
-    const studentBlockRegex = /(\d{5})\s*Marks[A-Z]?\s*([\s\S]*?)\s*Grade\s*([\s\S]*?)(?=(?:\n\s*\d{5}\s*Marks[A-Z]?)|$)/g;
+  const handleDownloadCsv = () => {
+    const prnsToFilter = prnFilter.split(/[\s,]+/).map((prn) => prn.trim()).filter((prn) => prn.length > 0);
+    let studentsToExport = allStudents;
+    if (prnsToFilter.length > 0) studentsToExport = allStudents.filter((student) => prnsToFilter.includes(student.PRN || ""));
+    if (studentsToExport.length === 0) return alert("No matching data available.");
 
-    let match;
-    while ((match = studentBlockRegex.exec(cleanedText)) !== null) {
-        const seatNo = match[1];
-        const marksBlock = match[2];
-        const gradeAndMetadataBlock = match[3];
-
-        // 1. Updated Regex to catch 'Ab' (Absent) as a valid mark token
-        const marksTokens = marksBlock.match(/[\d+\-EF\*\!Ab]+|[\d]+/g) || [];
-        const subjectMarks = marksTokens.slice(0, EXPECTED_COMPONENT_COUNT);
-        
-        // 2. IMPROVED TOTAL MARKS LOGIC
-        // Look for the total marks in the tokens immediately after the subject components
-        let totalMarks = 'N/A';
-        const postComponentTokens = marksTokens.slice(EXPECTED_COMPONENT_COUNT);
-        
-        // Students 53019-53021 often have their total marks as the 1st or 2nd token after subjects
-        if (postComponentTokens.length > 0) {
-            // Find the first token that looks like a 3-digit total or isn't just 'Ab'
-            const foundTotal = postComponentTokens.find(t => /^\d{3}$/.test(t) || (!isNaN(parseInt(t)) && parseInt(t) > 100));
-            totalMarks = foundTotal || postComponentTokens[0];
-        }
-
-        const gradeTokens = gradeAndMetadataBlock.match(/\b[A-Z]\b|(?:\s|^)[A-Z](?=\s|$)/g) || [];
-        const subjectGrades = gradeTokens.slice(0, EXPECTED_COMPONENT_COUNT);
-        
-        let name = 'N/A';
-        const potentialNameParts = gradeAndMetadataBlock
-            .replace(/\b[A-Z]\b/g, '') 
-            .replace(/(?:GP\*?C|GPC|GPA|SGPI|RESULT|TOTAL|Marks[A-Z]?|Grade)/gi, '') 
-            .match(/[A-Z\/\s]{5,}/g); 
-
-        if (potentialNameParts && potentialNameParts.length > 0) {
-            name = potentialNameParts.sort((a, b) => b.length - a.length)[0]
-                .replace(/[\/\n\r]/g, ' ') 
-                .replace(/\s+/g, ' ')
-                .trim();
-        }
-
-        // 3. IMPROVED RESULT CAPTURE (Fixes the N/A issue)
-        let sgpa = 'N/A';
-        let finalResult = 'N/A';
-        
-        // Specifically look for P or F at the end of the metadata block
-        const resultMatch = gradeAndMetadataBlock.match(/([\d\.]+)?\s+([PF])\s*$/); 
-        
-        if (resultMatch) {
-            if (resultMatch[1]) sgpa = resultMatch[1];
-            finalResult = resultMatch[2];
-        } else {
-            // Fallback for cases like student 53019/53020 where formatting is loose
-            if (gradeAndMetadataBlock.includes(' P')) finalResult = 'P';
-            else if (gradeAndMetadataBlock.includes(' F')) finalResult = 'F';
-            
-            const sgpaOnlyMatch = gradeAndMetadataBlock.match(/(\d\.\d{2})/);
-            if (sgpaOnlyMatch) sgpa = sgpaOnlyMatch[1];
-        }
-
-        const record: RawStudentRecord = { 
-            'Seat No': seatNo, 
-            'Name': name, 
-            'Total Marks': totalMarks, 
-            'SGPA': sgpa, 
-            'Final Result': finalResult 
-        };
-        
-        subjectMarks.forEach((mark, index) => { record[MARK_HEADERS[index]] = mark; });
-        subjectGrades.forEach((grade, index) => { record[GRADE_HEADERS[index]] = grade; });
-
-        if (subjectMarks.length > 0) records.push(record);
-    }
-    
-    const rows = records.map(record => FINAL_HEADERS.map(header => record[header] || 'N/A'));
-    return { headers: FINAL_HEADERS, rows, records };
-};
-  const onDownloadCsv = () => {
-    if (!extractedText) return;
-    const { headers, rows } = parseTextToStructuredData(extractedText);
-    if (rows.length === 0) return;
-
-    const escapeCell = (cell: string) => cell.includes(",") || cell.includes('"') || cell.includes("\n") ? `"${cell.replace(/"/g, '""')}"` : cell;
-    const csvLines = [headers.map(escapeCell).join(","), ...rows.map(row => row.map(escapeCell).join(","))];
-
-    download("converted-result-sheet.csv", csvLines.join("\n"), "text/csv;charset=utf-8;");
-    toast({ title: "Downloaded!", description: "CSV downloaded." });
+    const csvContent = generateCsvContent(studentsToExport);
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `sem${semester}_results_dynamic.csv`; a.click();
+    URL.revokeObjectURL(url);
   };
 
-  // --- UPLOAD & FETCH ANALYZE FUNCTION ---
-  const uploadToBackend = async () => {
-    if (!extractedText) {
-      toast({ title: "No Data", description: "Please upload a PDF first.", variant: "destructive" });
-      return;
-    }
+  const handleUploadToDatabase = async () => {
+    const prnsToFilter = prnFilter.split(/[\s,]+/).map((prn) => prn.trim()).filter((prn) => prn.length > 0);
+    let studentsToExport = allStudents;
+    if (prnsToFilter.length > 0) studentsToExport = allStudents.filter((student) => prnsToFilter.includes(student.PRN || ""));
+    if (studentsToExport.length === 0) return alert("No student data available to upload.");
 
-    const { headers, rows } = parseTextToStructuredData(extractedText);
-    if (rows.length === 0) {
-      toast({ title: "No Data", description: "No records to upload.", variant: "destructive" });
-      return;
-    }
+    const csvContent = generateCsvContent(studentsToExport);
+    const blob = new Blob([csvContent], { type: "text/csv" });
+    const file = new File([blob], `sem${semester}_converted_result.csv`, { type: "text/csv" });
 
-    const escapeCell = (cell: string) => cell.includes(",") || cell.includes('"') || cell.includes("\n") ? `"${cell.replace(/"/g, '""')}"` : cell;
-    const csvLines = [headers.map(escapeCell).join(","), ...rows.map(row => row.map(escapeCell).join(","))];
-    const csv = csvLines.join("\n");
-
-    const blob = new Blob([csv], { type: "text/csv" });
-    const file = new File([blob], "data.csv", { type: "text/csv" });
     const formData = new FormData();
     formData.append("file", file);
-    formData.append("semester", "3"); 
+    formData.append("semester", semester);
 
-    setIsLoading(true);
+    setIsUploading(true);
+
     try {
-      toast({ title: "Uploading...", description: "Sending data to database." });
-      const res = await fetch("http://localhost:5000/api/students/upload-csv", { method: "POST", body: formData });
-      const json = await res.json();
-      
-      if (!res.ok) {
-        throw new Error(json.message || "Upload failed");
+      const endpoint = isATKT 
+          ? "http://localhost:5000/api/students/upload-atkt-csv" 
+          : "http://localhost:5000/api/students/upload-csv";
+
+      const response = await fetch(endpoint, { method: "POST", body: formData });
+      const result = await response.json();
+
+      if (response.ok) {
+        alert(`Success! ${result.message}`);
+      } else {
+        alert(`Upload Failed: ${result.message || result.error}`);
       }
-
-      toast({ title: "Success", description: "Data uploaded. Fetching for analysis..." });
-
-      const fetchRes = await fetch("http://localhost:5000/api/students?semester=3");
-      if (!fetchRes.ok) throw new Error("Failed to fetch data from DB");
-      
-      const dbStudents = await fetchRes.json(); 
-
-      if (dbStudents.length === 0) {
-        toast({ title: "Warning", description: "Database is empty for Semester 3." });
-        setIsLoading(false);
-        return;
-      }
-
-      const recordsFromDB = dbStudents.map((s: any) => s.subjects);
-      
-      const analysis = analyzeStudentRecords(recordsFromDB);
-      setAnalysisData(analysis);
-      
-      toast({ title: "Analysis Ready", description: "Charts generated from verified Database data." });
-
-    } catch (err: any) {
-      console.error(err);
-      toast({ title: "Error", description: err.message || "Connection Error", variant: "destructive" });
+    } catch (error) {
+      alert("Network error.");
     } finally {
-      setIsLoading(false);
+      setIsUploading(false);
     }
   };
 
-  const hasData = extractedText.length > 0;
+  const hasData = allStudents.length > 0;
 
   return (
-    <div className="w-full space-y-6">
-      <Card className="p-6 space-y-6">
+    <div className="w-full max-w-4xl mx-auto p-4 space-y-8">
+      <div className={`border rounded-lg p-6 space-y-6 bg-white shadow-sm transition-all duration-300 ${isATKT ? 'border-orange-300' : 'border-indigo-100'}`}>
+        <h2 className={`text-xl font-bold border-b pb-2 ${isATKT ? 'text-orange-700' : 'text-indigo-800'}`}>
+            Semester {semester} Processor {isATKT && "(ATKT Mode)"}
+        </h2>
+        
         <div className="space-y-2">
-          <h2 className="text-xl font-semibold">{title}</h2>
-          <p className="text-sm text-muted-foreground">{description}</p>
+          <label className="text-sm font-medium">1. Upload PDF File</label>
+          <input
+            type="file" accept=".pdf" onChange={handleFileChange} disabled={isProcessing} onClick={(e) => (e.currentTarget.value = "")}
+            className={`w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold ${isATKT ? 'file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100' : 'file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100'}`}
+          />
         </div>
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <label className="text-sm font-medium flex items-center gap-2"><Upload className="w-4 h-4" /> Upload PDF File</label>
-            <Input type="file" accept=".pdf" onChange={(e) => handleFile(e.target.files?.[0] || null)} disabled={isLoading} onClick={(e) => (e.currentTarget.value = "")} />
+        <div className="space-y-2">
+          <label htmlFor="prn-filter" className="text-sm font-medium">2. (Optional) Filter by PRN Numbers</label>
+          <textarea
+            id="prn-filter" placeholder="Enter PRN numbers, separated by commas or newlines..."
+            value={prnFilter} onChange={(e) => setPrnFilter(e.target.value)} disabled={!hasData || isProcessing}
+            className="w-full p-2 border rounded-md min-h-[80px] font-mono text-xs"
+          />
+        </div>
+        <div className="space-y-2">
+          <label className="text-sm font-medium">3. Download Formatted Data</label>
+          <button
+            onClick={handleDownloadCsv} disabled={!hasData || isProcessing}
+            className={`w-full text-white font-bold py-2 px-4 rounded-lg disabled:bg-gray-400 ${isATKT ? 'bg-orange-600 hover:bg-orange-700' : 'bg-indigo-600 hover:bg-indigo-700'}`}
+          >
+            {isProcessing ? "Processing..." : `Download CSV (${prnFilter.trim() === "" ? "All" : "Filtered"})`}
+          </button>
+        </div>
+        <div className="space-y-2 pt-4 border-t border-gray-200">
+          <label className="text-sm font-medium">4. Upload to Database (Sem {semester})</label>
+          
+          <div className="flex items-center space-x-2 mb-4 bg-gray-50 p-3 rounded-lg border border-gray-200">
+            <input 
+              type="checkbox" id={`isAtkt${semester}`} 
+              checked={isATKT} onChange={(e) => setIsATKT(e.target.checked)} 
+              className="w-5 h-5 text-indigo-600 rounded cursor-pointer"
+            />
+            <label htmlFor={`isAtkt${semester}`} className="text-sm font-bold text-gray-700 cursor-pointer select-none">
+              This is an ATKT Result (Smartly updates existing records)
+            </label>
           </div>
-          <Button variant="default" className="w-full" onClick={onDownloadCsv} disabled={!hasData || isLoading}>
-            <FileSpreadsheet className="w-4 h-4 mr-2" /> {isLoading ? "Processing..." : "Download CSV"}
-          </Button>
-          <Button variant="secondary" className="w-full mt-2" onClick={uploadToBackend} disabled={!hasData || isLoading}>
-            <Database className="w-4 h-4 mr-2" /> Upload to Database & Analyze
-          </Button>
+
+          <button
+            onClick={handleUploadToDatabase} disabled={!hasData || isProcessing || isUploading}
+            className={`w-full text-white font-bold py-2 px-4 rounded-lg transition-colors ${isUploading ? "bg-gray-400 cursor-not-allowed" : "bg-green-600 hover:bg-green-700"}`}
+          >
+            {isUploading ? "Uploading..." : `Upload ${isATKT ? 'ATKT' : 'CSV'} to DB`}
+          </button>
         </div>
-        {hasData && (<div className="pt-4 border-t"><p className="text-sm text-muted-foreground">{studentRecords.length} student records ready to process.</p></div>)}
-      </Card>
-      
-      {analysisData && Object.keys(analysisData).length > 0 && (
-        <Card className="p-6 space-y-4">
-            <div className="flex items-center gap-2"><BarChart3 className="w-5 h-5" /><h3 className="text-lg font-semibold">Result Analysis (From Database)</h3></div>
-            <SubjectAnalysisReport analysisData={analysisData} />
-        </Card>
-      )}
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-6">
+        <div className="border rounded-lg p-6 bg-white shadow-sm">
+          <h2 className="text-lg font-semibold mb-4">Raw Extracted Text</h2>
+          <textarea value={rawText} placeholder="Raw text from PDF will appear here..." className="w-full p-2 border rounded-md min-h-[300px] font-mono text-xs" readOnly />
+        </div>
+        <div className="border rounded-lg p-6 bg-white shadow-sm">
+          <h2 className="text-lg font-semibold mb-4">Cleaned Text for Parsing</h2>
+          <textarea value={cleanedText} placeholder="Cleaned text will appear here..." className="w-full p-2 border rounded-md min-h-[300px] font-mono text-xs" readOnly />
+        </div>
+      </div>
+
+      <div className="border rounded-lg p-6 bg-white shadow-sm">
+        <h2 className="text-lg font-semibold mb-4">Final Parsed Data Preview ({allStudents.length} students loaded)</h2>
+        <div className="w-full overflow-x-auto">
+          <table className="min-w-full text-sm text-left">
+            <thead className="bg-gray-50">
+              <tr>{["Seat No", "Name", "PRN / ID", "Result", "SGPI"].map((h) => (<th key={h} className="px-4 py-2 font-medium">{h}</th>))}</tr>
+            </thead>
+            <tbody className="divide-y">
+              {hasData ? (
+                allStudents.slice(0, 10).map((s, idx) => (
+                  <tr key={s.Seat_No || s.seat_no || idx}>
+                    <td className="px-4 py-2 whitespace-nowrap">{s.Seat_No || s.seat_no || "N/A"}</td>
+                    <td className="px-4 py-2">{s.Name || s.name || "Unknown"}</td>
+                    <td className="px-4 py-2 whitespace-nowrap">{s.PRN || s.prn || "N/A"}</td>
+                    <td className="px-4 py-2 font-bold">{s.Result || s.result || "N/A"}</td>
+                    <td className="px-4 py-2">{s.SGPI || s.sgpi || "0"}</td>
+                  </tr>
+                ))
+              ) : (<tr><td colSpan={5} className="h-24 text-center">No data to display. Upload a file to begin.</td></tr>)}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 };

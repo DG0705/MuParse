@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { FileSpreadsheet, Upload, BarChart3 } from "lucide-react";
+import { FileSpreadsheet, Upload, BarChart3, Database } from "lucide-react";
 
 import SubjectAnalysisReport from "./SubjectAnalysisReport";
 
@@ -160,6 +160,11 @@ export const Sem6Converter: React.FC<SimplePdfConverterProps> = ({
   const [analysisData, setAnalysisData] = useState<AnalysisData | null>(null);
   const [studentRecords, setStudentRecords] = useState<RawStudentRecord[]>([]);
 
+  // --- NEW ATKT STATE ---
+  const semester = "6";
+  const [isATKT, setIsATKT] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  // ----------------------
 
   useMemo(() => {
     pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.mjs`;
@@ -240,11 +245,8 @@ export const Sem6Converter: React.FC<SimplePdfConverterProps> = ({
   const parseTextToStructuredData = (text: string): { headers: string[]; rows: string[][]; records: RawStudentRecord[] } => {
     const records: RawStudentRecord[] = [];
     
-    const studentBlockRegex =
-/(\d{5,10})\s*MarksO\s*([\s\S]*?)\s*Grade\s*([\s\S]*?)(?=\d{5,10}\s*MarksO|$)/g;
-    // const cleanedText = text.replace(/\r/g, '').replace(/\n\s{1,}\n/g, '\n\n'); this line i have changed because in some cases there are multiple newlines between student records and we want to preserve them to avoid merging records together
-    const cleanedText =
-text.trim().replace(/\r/g, '').replace(/\n\s{1,}\n/g, '\n\n') + "\n";
+    const studentBlockRegex = /(\d{5,10})\s*MarksO\s*([\s\S]*?)\s*Grade\s*([\s\S]*?)(?=\d{5,10}\s*MarksO|$)/g;
+    const cleanedText = text.trim().replace(/\r/g, '').replace(/\n\s{1,}\n/g, '\n\n') + "\n";
 
     let match;
     while ((match = studentBlockRegex.exec(cleanedText)) !== null) {
@@ -263,7 +265,6 @@ text.trim().replace(/\r/g, '').replace(/\n\s{1,}\n/g, '\n\n') + "\n";
         let sgpa = 'N/A';
         let finalResult = 'N/A';
         
-        // --- UPDATED NAME EXTRACTION LOGIC ---
         let nameStart = 0;
         const allGradeMatches = [...gradeAndMetadataBlock.matchAll(/[A-Z\-]+(\+[A-Z])?/g)];
         
@@ -287,7 +288,6 @@ text.trim().replace(/\r/g, '').replace(/\n\s{1,}\n/g, '\n\n') + "\n";
             .replace(/[^a-zA-Z\s\.\-']/g, "")
             .replace(/\s+/g, " ")
             .trim();
-        // -------------------------------------
 
         const sgpaResultBlock = gradeAndMetadataBlock.substring(nameStart); 
         
@@ -354,6 +354,7 @@ text.trim().replace(/\r/g, '').replace(/\n\s{1,}\n/g, '\n\n') + "\n";
 
   const hasData = extractedText.length > 0;
 
+  // --- NEW: UPLOAD TO DATABASE FUNCTION (WITH ATKT) ---
   const uploadToBackend = async () => {
     if (!extractedText) {
       toast({ title: "No Data", description: "Please upload a PDF file first.", variant: "destructive" });
@@ -377,31 +378,35 @@ text.trim().replace(/\r/g, '').replace(/\n\s{1,}\n/g, '\n\n') + "\n";
 
     const formData = new FormData();
     formData.append("file", file);
-    formData.append("semester", "6"); 
+    formData.append("semester", semester); 
 
-    setIsLoading(true);
+    setIsUploading(true);
     try {
-      const res = await fetch("http://localhost:5000/api/students/upload-csv", { method: "POST", body: formData });
+      const endpoint = isATKT 
+          ? "http://localhost:5000/api/students/upload-atkt-csv" 
+          : "http://localhost:5000/api/students/upload-csv";
+
+      const res = await fetch(endpoint, { method: "POST", body: formData });
       const json = await res.json();
       
       if (res.ok) {
         toast({ title: "Success", description: "Data stored in Database! You can now view analysis." });
       } else {
-        toast({ title: "Upload Failed", description: json.message || "Unknown error occurred", variant: "destructive" });
+        toast({ title: "Upload Failed", description: json.message || json.error || "Unknown error occurred", variant: "destructive" });
       }
     } catch (err) {
       console.error(err);
       toast({ title: "Connection Error", description: "Is the backend server running on port 5000?", variant: "destructive" });
     } finally {
-      setIsLoading(false);
+      setIsUploading(false);
     }
   };
 
   return (
     <div className="w-full space-y-6">
-      <Card className="p-6 space-y-6">
+      <Card className={`p-6 space-y-6 transition-all duration-300 ${isATKT ? 'border-2 border-orange-300' : ''}`}>
         <div className="space-y-2">
-          <h2 className="text-xl font-semibold">{title}</h2>
+          <h2 className={`text-xl font-semibold ${isATKT ? 'text-orange-700' : ''}`}>{title} {isATKT && "(ATKT Mode)"}</h2>
           <p className="text-sm text-muted-foreground">{description}</p>
         </div>
         <div className="space-y-4">
@@ -416,17 +421,38 @@ text.trim().replace(/\r/g, '').replace(/\n\s{1,}\n/g, '\n\n') + "\n";
               onChange={(e) => handleFile(e.target.files?.[0] || null)}
               disabled={isLoading}
               onClick={(e) => (e.currentTarget.value = "")}
+              className={isATKT ? "bg-orange-50" : ""}
             />
           </div>
         </div>
+
         <Button variant="default" className="w-full" onClick={onDownloadCsv} disabled={!hasData || isLoading}>
             <FileSpreadsheet className="w-4 h-4 mr-2" />
             {isLoading ? "Processing..." : "Download CSV"}
+        </Button>
+
+        {/* --- ADDED ATKT CHECKBOX --- */}
+        <div className="pt-4 border-t space-y-4">
+          <div className="flex items-center space-x-2 bg-gray-50 p-3 rounded-lg border border-gray-200">
+            <input 
+              type="checkbox" id={`isAtkt${semester}`} 
+              checked={isATKT} onChange={(e) => setIsATKT(e.target.checked)} 
+              className="w-5 h-5 text-indigo-600 rounded cursor-pointer"
+            />
+            <label htmlFor={`isAtkt${semester}`} className="text-sm font-bold text-gray-700 cursor-pointer select-none">
+              This is an ATKT Result (Smartly updates existing records)
+            </label>
+          </div>
+
+          <Button 
+            className={`w-full mt-2 ${isATKT ? 'bg-orange-600 hover:bg-orange-700' : 'bg-green-600 hover:bg-green-700'}`} 
+            onClick={uploadToBackend} disabled={!hasData || isLoading || isUploading}
+          >
+            <Database className="w-4 h-4 mr-2" />
+            {isUploading ? "Uploading..." : `Upload ${isATKT ? 'ATKT' : 'CSV'} to DB`}
           </Button>
-          <Button variant="secondary" className="w-full mt-2" onClick={uploadToBackend} disabled={!hasData || isLoading}>
-            <BarChart3 className="w-4 h-4 mr-2" />
-            Upload to Database & Analyze
-          </Button>
+        </div>
+
         {hasData && (
           <div className="pt-4 border-t">
             <p className="text-sm text-muted-foreground">
@@ -440,7 +466,7 @@ text.trim().replace(/\r/g, '').replace(/\n\s{1,}\n/g, '\n\n') + "\n";
         <Card className="p-6 space-y-4">
             <div className="flex items-center gap-2">
                 <BarChart3 className="w-5 h-5" />
-                <h3 className="text-lg font-semibold">Semester 3 Result Analysis</h3>
+                <h3 className="text-lg font-semibold">Semester {semester} Result Analysis</h3>
             </div>
             <SubjectAnalysisReport analysisData={analysisData} />
         </Card>

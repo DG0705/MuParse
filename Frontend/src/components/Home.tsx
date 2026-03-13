@@ -238,17 +238,7 @@ const Home = () => {
 
             <Separator />
             
-            <h3 className="text-2xl font-bold mt-8 mb-4">Direct Semester Converters</h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {semesterTools.map((tool) => (
-                <Link key={tool.num} to={tool.converter}>
-                  <Button variant="outline" className="w-full h-16 flex justify-between group bg-white hover:border-blue-500">
-                    <span className="flex items-center gap-2"><FileJson className="w-5 h-5 text-slate-400 group-hover:text-blue-500" /> Sem {tool.num}</span>
-                    <ChevronRight className="w-4 h-4 opacity-50 group-hover:opacity-100" />
-                  </Button>
-                </Link>
-              ))}
-            </div>
+            
           </TabsContent>
 
           {/* ==================== 2. NEP TAB ==================== */}

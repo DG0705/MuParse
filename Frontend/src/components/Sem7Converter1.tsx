@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Database } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   Table,
@@ -95,6 +95,12 @@ export const Sem7Converter: React.FC = () => {
   const [students, setStudents] = useState<StudentRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [prnFilter, setPrnFilter] = useState("");
+
+  // --- NEW ATKT STATE ---
+  const semester = "7";
+  const [isATKT, setIsATKT] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  // ----------------------
 
   useMemo(() => {
     pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.mjs`;
@@ -227,71 +233,43 @@ export const Sem7Converter: React.FC = () => {
     return ["Seat No", "Name", "Result", "SGPI", ...markCols];
   }, []);
 
-
-
+// --- NEW: UPLOAD TO DATABASE FUNCTION (WITH ATKT) ---
 const uploadToBackend = async () => {
-    // Check if we have students data
     if (students.length === 0) {
-      toast({ 
-        title: "No data", 
-        description: "Please process a PDF first.",
-        variant: "destructive" 
-      });
+      toast({ title: "No data", description: "Please process a PDF first.", variant: "destructive" });
       return;
     }
 
-    // 1. Convert parsed students to CSV string (using existing utility)
     const csvData = toCsv(students);
-    
-    // 2. Create File Object
     const blob = new Blob([csvData], { type: "text/csv" });
     const file = new File([blob], "data.csv", { type: "text/csv" });
 
     const formData = new FormData();
     formData.append("file", file);
-    formData.append("semester", "7"); // Set for Semester 7
+    formData.append("semester", semester); 
 
-    setIsLoading(true);
+    setIsUploading(true);
     try {
-      const res = await fetch("http://localhost:5000/api/students/upload-csv", {
-        method: "POST",
-        body: formData,
-      });
+      const endpoint = isATKT 
+          ? "http://localhost:5000/api/students/upload-atkt-csv" 
+          : "http://localhost:5000/api/students/upload-csv";
+
+      const res = await fetch(endpoint, { method: "POST", body: formData });
       const json = await res.json();
       
       if (res.ok) {
-        toast({ 
-          title: "Success", 
-          description: "Data stored in Database! You can now view analysis." 
-        });
+        toast({ title: "Success", description: "Data stored in Database! You can now view analysis." });
       } else {
-        toast({ 
-          title: "Upload Failed", 
-          description: json.message || "Unknown error occurred", 
-          variant: "destructive" 
-        });
+        toast({ title: "Upload Failed", description: json.message || "Unknown error occurred", variant: "destructive" });
       }
     } catch (err) {
       console.error(err);
-      toast({ 
-        title: "Connection Error", 
-        description: "Is the backend server running on port 5000?", 
-        variant: "destructive" 
-      });
+      toast({ title: "Connection Error", description: "Is the backend server running on port 5000?", variant: "destructive" });
     } finally {
-      setIsLoading(false);
+      setIsUploading(false);
     }
   }
 
-
-
-
-
-
-
-
-
-  
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b bg-card sticky top-0 z-10 backdrop-blur-sm bg-card/95">
@@ -304,7 +282,7 @@ const uploadToBackend = async () => {
           </Link>
           <div>
             <h1 className="text-2xl font-bold">
-              Semester 7 - PDF to CSV Converter
+              Semester {semester} - PDF to CSV Converter
             </h1>
             <p className="text-sm text-muted-foreground">
               Convert result PDFs to structured CSV format
@@ -314,7 +292,11 @@ const uploadToBackend = async () => {
       </header>
       <main className="container mx-auto px-4 py-8 animate-fade-in">
         <div className="w-full space-y-8">
-          <Card className="p-6 space-y-6">
+          <Card className={`p-6 space-y-6 transition-all duration-300 ${isATKT ? 'border-2 border-orange-300' : ''}`}>
+            <h2 className={`text-xl font-semibold ${isATKT ? 'text-orange-700' : ''}`}>
+               Processor Settings {isATKT && "(ATKT Mode)"}
+            </h2>
+
             <div className="flex flex-col md:flex-row gap-4 items-start">
               <div className="space-y-2 flex-1">
                 <label className="text-sm font-medium">
@@ -326,6 +308,7 @@ const uploadToBackend = async () => {
                   onChange={(e) => handleFile(e.target.files?.[0] || null)}
                   disabled={isLoading}
                   onClick={(e) => (e.currentTarget.value = "")}
+                  className={isATKT ? "bg-orange-50" : ""}
                 />
               </div>
             </div>
@@ -344,56 +327,35 @@ const uploadToBackend = async () => {
               />
             </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium">
-                3. Download Formatted Data
-              </label>
-              {/* <Button
-                variant="outline"
-                className="w-full"
-                onClick={onDownloadCsv}
-                disabled={!hasData || isLoading}
-              >
-                {isLoading ? "Processing..." : "Download CSV"}
-              </Button> */}
-            </div>
-
-
-
-            <div className="space-y-2">
+            <div className="space-y-2 pt-4 border-t border-gray-200">
               <label className="text-sm font-medium">
                 3. Actions
               </label>
-              <div className="flex flex-col gap-2">
-                {/* Existing Download Button */}
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={onDownloadCsv}
-                  disabled={!hasData || isLoading}
-                >
-                  {isLoading ? "Processing..." : "Download CSV"}
-                </Button>
+              
+              <Button variant="outline" className="w-full mb-4" onClick={onDownloadCsv} disabled={!hasData || isLoading}>
+                {isLoading ? "Processing..." : "Download CSV"}
+              </Button>
 
-                {/* --- ADD THIS NEW BUTTON HERE --- */}
-                <Button
-                  variant="default"
-                  className="w-full"
-                  onClick={uploadToBackend}
-                  disabled={!hasData || isLoading}
-                >
-                  Upload to Database & Analyze
-                </Button>
+              {/* --- ADDED ATKT CHECKBOX --- */}
+              <div className="flex items-center space-x-2 mb-4 bg-gray-50 p-3 rounded-lg border border-gray-200">
+                <input 
+                  type="checkbox" id={`isAtkt${semester}`} 
+                  checked={isATKT} onChange={(e) => setIsATKT(e.target.checked)} 
+                  className="w-5 h-5 text-indigo-600 rounded cursor-pointer"
+                />
+                <label htmlFor={`isAtkt${semester}`} className="text-sm font-bold text-gray-700 cursor-pointer select-none">
+                  This is an ATKT Result (Smartly updates existing records)
+                </label>
               </div>
+
+              <Button 
+                className={`w-full mt-2 ${isATKT ? 'bg-orange-600 hover:bg-orange-700 text-white' : ''}`} 
+                onClick={uploadToBackend} disabled={!hasData || isLoading || isUploading}
+              >
+                <Database className="w-4 h-4 mr-2" />
+                {isUploading ? "Uploading..." : `Upload ${isATKT ? 'ATKT' : 'CSV'} to DB & Analyze`}
+              </Button>
             </div>
-
-
-
-
-
-
-
-
           </Card>
 
           <div className="grid md:grid-cols-2 gap-6">
@@ -416,6 +378,7 @@ const uploadToBackend = async () => {
               />
             </Card>
           </div>
+          
           <Card className="p-6">
             <h2 className="text-lg font-semibold mb-4">
               Final Parsed Data Preview ({students.length} students)
