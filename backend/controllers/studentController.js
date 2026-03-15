@@ -143,8 +143,14 @@ const uploadCsvData = async (req, res) => {
 
       const finalPRN = rawPRN || `TEMP_${cleanSeatNo}`;
       
+      // 1. Extract using BOTH variations
+      const extractedSGPI = s["SGPI"] || s["SGPA"] || "0";
+      const extractedTotal = s["Grand_Total"] || s["Total Marks"] || "0";
+      const extractedResult = s["Result"] || s["Final Result"] || "N/A";
+
       const flatSubjects = {};
-      const excludedKeys = ["seat no", "seat_no", "prn", "name", "gender", "result", "sgpi", "grand_total", "remark"];
+      // 2. Exclude BOTH variations so they don't end up in the subjects list
+      const excludedKeys = ["seat no", "seat_no", "prn", "name", "gender", "result", "final result", "sgpi", "sgpa", "grand_total", "total marks", "remark"];
       Object.keys(s).forEach((key) => {
         if (!excludedKeys.includes(key.toLowerCase().trim())) flatSubjects[key] = s[key];
       });
@@ -161,7 +167,14 @@ const uploadCsvData = async (req, res) => {
         updateOne: {
           filter: { prn: finalPRN, semester: semNum },
           update: {
-            $set: { seatNo: cleanSeatNo, sgpi: s["SGPI"] || "0", finalResult: s["Result"] || "N/A", subjects: flatSubjects },
+            // 3. Save the properly extracted values
+            $set: { 
+              seatNo: cleanSeatNo, 
+              sgpi: extractedSGPI, 
+              totalMarks: extractedTotal, 
+              finalResult: extractedResult, 
+              subjects: flatSubjects 
+            },
           },
           upsert: true,
         },
@@ -175,11 +188,12 @@ const uploadCsvData = async (req, res) => {
       success: true,
       message: "CSV Processed and saved to R-19 Database",
       students: data.map((s) => ({
-        seat_no: s["Seat No"] || s["Seat_No"], name: s["Name"], prn: s["PRN"], result: s["Result"], sgpi: s["SGPI"],
+        seat_no: s["Seat No"] || s["Seat_No"], name: s["Name"], prn: s["PRN"], result: s["Result"] || s["Final Result"], sgpi: s["SGPI"] || s["SGPA"],
       }))
     });
   } catch (error) { res.status(500).json({ error: error.message }); }
 };
+
 
 // --- DATA RETRIEVAL FOR ANALYSIS TABS ---
 const getStudents = async (req, res) => {
@@ -298,63 +312,48 @@ const getStudentHistory = async (req, res) => {
 
     const academicHistory = {};
     
-    // Status Trackers
+    // STRICT TRACKERS
     let eseFCount = 0;
     let otherFCount = 0;
-    let totalKtsUI = 0; // Total KTs tracked for the UI count
+    let activeKtsCount = 0; 
 
     allRecords.forEach(record => {
       const semKey = `Semester ${record.semester}`;
       if (!academicHistory[semKey]) academicHistory[semKey] = [];
 
       let hasKT = false;
+      
       if (record.subjects) {
         Object.entries(record.subjects).forEach(([key, val]) => {
           const k = key.toLowerCase().trim();
-          if (k.includes('tot') || k.includes('result') || k.includes('status') || k.includes('remark') || k.includes('sgpi') || k.includes('cgpi') || k.includes('credit')) return;
+          
+          // STRICT RULE: ONLY check keys that are explicitly 'Grade' columns
+          if (!k.includes('grade') && !k.endsWith('_gr')) return;
+          
+          // Ignore Total grades just in case
+          if (k.includes('tot') || k.includes('result') || k.includes('status') || k.includes('sgp')) return;
           
           const valStr = String(val).trim().toUpperCase();
-          
-          // Strict check to ensure 'F' is isolated and not part of 'FEMALE' or 'SUCCESSFUL'
           const isFail = valStr === 'F' || valStr === 'ABS' || valStr === 'KT' || 
                          (valStr.includes('F') && valStr.length <= 6 && !valStr.includes('FEM'));
 
           if (isFail) {
               hasKT = true;
-              totalKtsUI++;
+              activeKtsCount++;
               
-              // Smart Tokenizer for R-19 Combined Fields (e.g. "32 15F" -> Theory Passed, TW Failed)
-              if (k.includes('th_tw')) {
-                  const parts = valStr.split(/\s+/);
-                  const p0Fail = parts[0] && (parts[0] === 'F' || parts[0].includes('F') || parts[0] === 'ABS' || parts[0] === 'KT');
-                  const p1Fail = parts[1] && (parts[1] === 'F' || parts[1].includes('F') || parts[1] === 'ABS' || parts[1] === 'KT');
-                  
-                  if (p0Fail) eseFCount++;
-                  if (p1Fail) otherFCount++;
-                  if (!p0Fail && !p1Fail) eseFCount++; // Fallback
-                  
-              } else if (k.includes('in_pror')) {
-                  const parts = valStr.split(/\s+/);
-                  const p0Fail = parts[0] && (parts[0] === 'F' || parts[0].includes('F') || parts[0] === 'ABS' || parts[0] === 'KT');
-                  const p1Fail = parts[1] && (parts[1] === 'F' || parts[1].includes('F') || parts[1] === 'ABS' || parts[1] === 'KT');
-                  
-                  if (p0Fail) otherFCount++;
-                  if (p1Fail) otherFCount++;
-                  if (!p0Fail && !p1Fail) otherFCount++; // Fallback
-
+              if (k.includes('ese') || k.includes('th') || k.includes('theory')) {
+                  eseFCount++;
+              } else if (k.includes('ia') || k.includes('tw') || k.includes('pr') || k.includes('or') || k.includes('pract') || k.includes('term') || k.includes('internal')) {
+                  otherFCount++;
               } else {
-                  // Fallback for single columns
-                  if (k.includes('ia') || k.includes('tw') || k.includes('pr') || k.includes('or') || k.includes('pract') || k.includes('term')) {
-                      otherFCount++;
-                  } else {
-                      eseFCount++;
-                  }
+                  eseFCount++; 
               }
           }
         });
       }
       
-      if (record.finalResult === "F" || record.finalResult === "FAILED" || record.finalResult === "KT") hasKT = true;
+      const resUpper = String(record.finalResult).toUpperCase();
+      if (resUpper === "F" || resUpper === "FAILED" || resUpper === "KT" || resUpper.includes("FAIL")) hasKT = true;
 
       academicHistory[semKey].push({
         seatNo: record.seatNo,
@@ -368,18 +367,23 @@ const getStudentHistory = async (req, res) => {
 
     const totalSystemFails = eseFCount + otherFCount;
 
-    // --- DYNAMIC DROPPER LOGIC OVERRIDE ---
-    let finalCategory = student.category || "Regular";
+    // --- STRICT DYNAMIC DROPPER LOGIC ---
+    let finalCategory = "Regular"; 
     
-    // Apply logic ONLY to R-19 students
     if (student.batch === "R-19 Scheme" || !student.batch?.includes("NEP")) {
-        // Condition 1: ESE F >= 5
-        if (eseFCount >= 5) {
-            finalCategory = "Dropper";
-        } 
-        // Condition 2: Total F >= 10
-        else if (totalSystemFails >= 10) {
-            finalCategory = "Dropper";
+        
+        // 1. If no active KTs, always Regular
+        if (activeKtsCount === 0) {
+            finalCategory = "Regular";
+        } else {
+            // 2. Exact Dropper Rules
+            if (eseFCount >= 5) {
+                finalCategory = "Dropper";
+            } else if (totalSystemFails >= 10) {
+                finalCategory = "Dropper";
+            } else {
+                finalCategory = "Regular"; 
+            }
         }
     }
 
@@ -388,10 +392,10 @@ const getStudentHistory = async (req, res) => {
       profile: {
         name: student.name,
         prn: student.prn,
-        category: finalCategory, // Replaces default status dynamically based on logic
+        category: finalCategory, 
         batch: student.batch
       },
-      summary: { totalSemestersAppeared: allRecords.length, ktCount: totalKtsUI },
+      summary: { totalSemestersAppeared: allRecords.length, ktCount: activeKtsCount },
       academicHistory: academicHistory
     });
 
@@ -480,23 +484,26 @@ const uploadAtktCsvData = async (req, res) => {
       const cleanSeatNo = (seatKey ? s[seatKey] : "").toString().replace(/[^0-9]/g, "");
       const rawPRN = (s["PRN"] || "").toString().replace(/[^0-9]/g, "");
       
-      if (!rawPRN) return; // ATKT requires PRN to match the old record
+      if (!rawPRN) return; 
+
+      const extractedSGPI = s["SGPI"] || s["SGPA"] || "0";
+      const extractedTotal = s["Grand_Total"] || s["Total Marks"] || "0";
+      const extractedResult = s["Result"] || s["Final Result"] || "N/A";
 
       const flatSubjects = {};
-      const excludedKeys = ["seat no", "seat_no", "prn", "name", "gender", "result", "sgpi", "grand_total", "remark"];
+      const excludedKeys = ["seat no", "seat_no", "prn", "name", "gender", "result", "final result", "sgpi", "sgpa", "grand_total", "total marks", "remark"];
       Object.keys(s).forEach((key) => {
         if (!excludedKeys.includes(key.toLowerCase().trim())) flatSubjects[key] = s[key];
       });
 
-      // Build dotted update object so we don't wipe out existing passed subjects
       const updateFields = {
-        sgpi: s["SGPI"] || "0", 
-        finalResult: s["Result"] || "N/A",
-        seatNo: cleanSeatNo // Updates their seat number to the latest ATKT seat number
+        sgpi: extractedSGPI, 
+        totalMarks: extractedTotal,
+        finalResult: extractedResult,
+        seatNo: cleanSeatNo 
       };
 
       Object.entries(flatSubjects).forEach(([key, val]) => {
-         // Only update if there is an actual mark inside the column
          if (val && val.toString().trim() !== "") {
              updateFields[`subjects.${key}`] = val;
          }
@@ -506,7 +513,7 @@ const uploadAtktCsvData = async (req, res) => {
         updateOne: {
           filter: { prn: rawPRN, semester: semNum },
           update: { $set: updateFields },
-          upsert: true // Creates it if the regular result wasn't uploaded first
+          upsert: true 
         },
       });
     });
@@ -517,7 +524,7 @@ const uploadAtktCsvData = async (req, res) => {
           success: true,
           message: `ATKT Processed! Smart Updated ${dbResult.modifiedCount} records & Inserted ${dbResult.upsertedCount}.`,
           students: data.map((s) => ({
-            seat_no: s["Seat No"] || s["Seat_No"], name: s["Name"], prn: s["PRN"], result: s["Result"], sgpi: s["SGPI"],
+            seat_no: s["Seat No"] || s["Seat_No"], name: s["Name"], prn: s["PRN"], result: s["Result"] || s["Final Result"], sgpi: s["SGPI"] || s["SGPA"],
           }))
         });
     } else {
@@ -525,7 +532,6 @@ const uploadAtktCsvData = async (req, res) => {
     }
   } catch (error) { res.status(500).json({ error: error.message }); }
 };
-
 
 
 module.exports = { 

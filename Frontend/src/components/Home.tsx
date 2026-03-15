@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { 
   GraduationCap, BookOpen, Users, TrendingUp, Search, AlertTriangle, Users2, ChevronRight,
-  FileJson, BarChart3, GitMerge, FileText, Database, RefreshCcw
+  GitMerge, FileText, Database, RefreshCcw, BarChart3
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,7 +18,6 @@ import axios from "axios";
 // --- Interfaces ---
 interface StudentData {
   type?: "single";
-  // Added 'batch' to receive the scheme type from the backend
   profile: { name: string; prn: string; category: string; batch?: string; };
   summary: { totalSemestersAppeared: number; ktCount: number; };
   academicHistory: Record<string, SemesterRecord[]>;
@@ -56,7 +55,7 @@ const Home = () => {
     analysis: [1, 2, 7, 8].includes(i + 1) ? `/sem${i + 1}-analysis` : null
   }));
 
-  // --- Original Search States ---
+  // --- States ---
   const [searchQuery, setSearchQuery] = useState("");
   const [batchQuery, setBatchQuery] = useState("");
   const [studentData, setStudentData] = useState<StudentData | null>(null);
@@ -67,7 +66,6 @@ const Home = () => {
   const [showSelectionDialog, setShowSelectionDialog] = useState(false);
   const [error, setError] = useState("");
 
-  // --- NEP Upload States ---
   const [nepFile, setNepFile] = useState<File | null>(null);
   const [nepSemester, setNepSemester] = useState("");
   const [isNepProcessing, setIsNepProcessing] = useState(false);
@@ -76,24 +74,25 @@ const Home = () => {
   const getAllKts = (data: StudentData | null): KTDetail[] => {
     if (!data || !data.academicHistory) return [];
     const kts: KTDetail[] = [];
+
     Object.entries(data.academicHistory).forEach(([sem, records]) => {
       const record = records?.[0]; 
       if (record && record.subjects) {
         Object.entries(record.subjects).forEach(([key, val]) => {
           const k = key.toLowerCase().trim();
           const valStr = String(val).trim().toUpperCase();
-          if (k.includes('tot') || k.includes('result') || k.includes('status')) return;
-          if (valStr === "F" || valStr.includes("KT")) {
-            let displayValue = valStr;
-            let displaySubject = key;
-            if (key.endsWith("_GR")) {
-               const marksKey = key.replace("_GR", "_Marks");
-               if (record.subjects[marksKey]) {
-                 displayValue = String(record.subjects[marksKey]);
-                 displaySubject = marksKey;
-               }
-            }
-            kts.push({ semester: sem, subject: displaySubject, value: displayValue });
+          
+          if (!k.includes('grade') && !k.endsWith('_gr')) return;
+          if (k.includes('tot') || k.includes('result') || k.includes('status') || k.includes('sgp')) return;
+          
+          const isFail = valStr === 'F' || valStr === 'ABS' || valStr === 'KT' || (valStr.includes('F') && valStr.length <= 6 && !valStr.includes('FEM'));
+
+          if (isFail) {
+            let baseSubject = key.replace(/_Grade|_GR/gi, "");
+            let marksKey = Object.keys(record.subjects).find(mk => mk.toLowerCase() === `${baseSubject.toLowerCase()}_marks`);
+            let displayValue = marksKey && record.subjects[marksKey] ? String(record.subjects[marksKey]) : valStr;
+
+            kts.push({ semester: sem, subject: baseSubject.replace(/_/g, " "), value: displayValue });
           }
         });
       }
@@ -113,7 +112,7 @@ const Home = () => {
     if (!queryOverride) setMultipleMatches(null);
 
     try {
-      const response = await fetch(`http://localhost:5000/api/students/history/${query}`, { cache: 'no-store' });
+      const response = await fetch(`http://localhost:5000/api/students/history/${query.trim()}`, { cache: 'no-store' });
       if (!response.ok) throw new Error("Student not found");
       const backendData = await response.json();
       
@@ -140,7 +139,7 @@ const Home = () => {
     setError("");
 
     try {
-      const response = await fetch(`http://localhost:5000/api/students/batch/${batchQuery}`);
+      const response = await fetch(`http://localhost:5000/api/students/batch/${batchQuery.trim()}`);
       if (!response.ok) throw new Error("No students found for this batch");
       const result = await response.json();
       setBatchResults(Array.isArray(result) ? { count: result.length, batch: batchQuery, students: result } : result);
@@ -151,8 +150,8 @@ const Home = () => {
     }
   };
 
-  const handleMerge = async (sourcePrn: string, targetPrn: string) => {
-    if (!window.confirm(`Merge all data from ${sourcePrn} into ${targetPrn}? This will delete the temporary profile.`)) return;
+  const handleMerge = async (sourcePrn: string, targetPrn: string, targetName: string) => {
+    if (!window.confirm(`Merge all data into "${targetName}" (${targetPrn})?\nThis will permanently link the records and delete the temporary profile.`)) return;
     try {
       const response = await fetch('http://localhost:5000/api/students/merge', {
         method: 'POST',
@@ -205,7 +204,7 @@ const Home = () => {
       </header>
 
       <main className="container mx-auto px-4 py-8 max-w-7xl">
-        <Tabs defaultValue="r19" className="w-full">
+        <Tabs defaultValue="search" className="w-full">
           
           <TabsList className="grid w-full grid-cols-1 md:grid-cols-4 h-auto p-1 bg-slate-200/50 rounded-xl mb-8">
             <TabsTrigger value="r19" className="py-3 text-base rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm">R-19 Management</TabsTrigger>
@@ -235,10 +234,7 @@ const Home = () => {
                 </Link>
               ))}
             </div>
-
             <Separator />
-            
-            
           </TabsContent>
 
           {/* ==================== 2. NEP TAB ==================== */}
@@ -317,7 +313,7 @@ const Home = () => {
 
               {error && <Alert variant="destructive" className="mt-4"><AlertTriangle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>}
 
-              {/* MULTIPLE MATCHES DIALOG (WITH SCHEME BADGE ADDED) */}
+              {/* MULTIPLE MATCHES DIALOG */}
               <Dialog open={showSelectionDialog} onOpenChange={setShowSelectionDialog}>
                 <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
                   <DialogHeader>
@@ -327,7 +323,25 @@ const Home = () => {
                   <div className="grid gap-3 mt-4">
                     {multipleMatches?.students?.map((student, idx) => {
                       const isTemp = student.prn.startsWith("TEMP_");
-                      const realTarget = multipleMatches.students.find(s => !s.prn.startsWith("TEMP_"));
+                      
+                      const realTargets = multipleMatches.students.filter(s => !s.prn.startsWith("TEMP_"));
+                      let bestRealTarget = realTargets.length > 0 ? realTargets[0] : null;
+
+                      if (isTemp && realTargets.length > 1) {
+                          let bestScore = -1;
+                          const tempNameWords = student.name.toLowerCase().split(' ').filter(w => w.length > 2);
+
+                          realTargets.forEach(rt => {
+                              const rtNameWords = rt.name.toLowerCase().split(' ');
+                              let score = 0;
+                              tempNameWords.forEach(w => { if (rtNameWords.includes(w)) score++; });
+
+                              if (score > bestScore) {
+                                  bestScore = score;
+                                  bestRealTarget = rt;
+                              }
+                          });
+                      }
                       
                       return (
                         <div key={student.prn || idx} className="flex items-center justify-between p-4 rounded-lg border bg-card hover:bg-muted/50 transition-all cursor-pointer" onClick={() => { setShowSelectionDialog(false); handleSearch(student.prn); }}>
@@ -336,15 +350,14 @@ const Home = () => {
                             <div>
                               <h4 className="font-bold">{student.name}</h4>
                               <p className="text-sm text-muted-foreground font-mono mb-1">ID/Seat: {student.prn}</p>
-                              {/* --- ADDED SMALL SCHEME BADGE --- */}
                               <Badge variant={student.batch?.includes("NEP") ? "default" : "secondary"} className="text-[10px] px-1.5 py-0 h-4">
                                 {student.batch || "R-19 Scheme"}
                               </Badge>
                             </div>
                           </div>
                           <div className="flex gap-2">
-                            {isTemp && realTarget && (
-                              <Button variant="outline" size="sm" className="text-orange-600 border-orange-200" onClick={(e) => { e.stopPropagation(); handleMerge(student.prn, realTarget.prn); }}>
+                            {isTemp && bestRealTarget && (
+                              <Button variant="outline" size="sm" className="text-orange-600 border-orange-200" onClick={(e) => { e.stopPropagation(); handleMerge(student.prn, bestRealTarget!.prn, bestRealTarget!.name); }}>
                                 <GitMerge className="w-4 h-4 mr-1" /> Merge
                               </Button>
                             )}
@@ -361,22 +374,23 @@ const Home = () => {
                 <div className="mt-8 space-y-6 animate-in slide-in-from-bottom-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       
-                      {/* MAIN PROFILE CARD (WITH SCHEME BADGE ADDED) */}
                       <Card>
                         <CardHeader className="pb-2 bg-muted/20"><CardTitle className="text-lg">Student Profile</CardTitle></CardHeader>
                         <CardContent className="pt-4 space-y-3">
                           <div className="flex justify-between border-b pb-2"><span className="text-muted-foreground">Name</span><span className="font-semibold">{studentData.profile?.name}</span></div>
                           <div className="flex justify-between border-b pb-2"><span className="text-muted-foreground">ID / Seat No</span><span className="font-mono">{studentData.profile?.prn}</span></div>
-                          
-                          {/* --- ADDED SCHEME ROW --- */}
                           <div className="flex justify-between border-b pb-2">
                             <span className="text-muted-foreground">Scheme</span>
                             <Badge variant={studentData.profile?.batch?.includes("NEP") ? "default" : "secondary"}>
                               {studentData.profile?.batch || "R-19 Scheme"}
                             </Badge>
                           </div>
-
-                          <div className="flex justify-between pt-1"><span className="text-muted-foreground">Status</span><Badge variant="outline">{studentData.profile?.category}</Badge></div>
+                          <div className="flex justify-between pt-1">
+                            <span className="text-muted-foreground">Status</span>
+                            <Badge variant={studentData.profile?.category === "Dropper" ? "destructive" : "outline"}>
+                              {studentData.profile?.category}
+                            </Badge>
+                          </div>
                         </CardContent>
                       </Card>
 
@@ -385,15 +399,16 @@ const Home = () => {
                         <CardContent className="pt-4 space-y-4">
                           <div className="flex justify-between items-center"><span className="text-muted-foreground">Semesters Appeared</span><span className="font-bold text-2xl">{studentData.summary?.totalSemestersAppeared}</span></div>
                           <div className="flex justify-between items-center"><span className="text-muted-foreground">Total KTs</span>
-                            {currentKts.length > 0 ? (
+                            {studentData.summary?.ktCount > 0 ? (
                               <Dialog>
-                                <DialogTrigger asChild><Badge variant="destructive" className="cursor-pointer">{currentKts.length} Active KT(s)</Badge></DialogTrigger>
+                                <DialogTrigger asChild><Badge variant="destructive" className="cursor-pointer">{studentData.summary.ktCount} Active KT(s)</Badge></DialogTrigger>
                                 <DialogContent>
                                   <DialogHeader><DialogTitle>KT Breakdown</DialogTitle></DialogHeader>
-                                  <div className="space-y-2">
+                                  <div className="space-y-2 max-h-[300px] overflow-y-auto">
                                     {currentKts.map((kt, i) => (
-                                      <div key={i} className="flex justify-between p-2 border rounded">
-                                        <span>{kt.subject} ({kt.semester})</span><Badge variant="secondary">{kt.value}</Badge>
+                                      <div key={i} className="flex justify-between p-2 border rounded items-center">
+                                        <span className="font-medium text-sm">{kt.subject} <span className="text-xs text-muted-foreground ml-1">({kt.semester})</span></span>
+                                        <Badge variant="secondary" className="bg-red-50 text-red-600">{kt.value}</Badge>
                                       </div>
                                     ))}
                                   </div>
@@ -407,34 +422,58 @@ const Home = () => {
 
                     <Separator className="my-6" />
                     <h3 className="text-xl font-bold flex items-center gap-2"><GraduationCap className="h-5 w-5 text-primary" /> Semester Breakdown</h3>
+                    
                     <div className="grid gap-6">
                       {Object.entries(studentData.academicHistory || {}).map(([semName, records]) => {
                         const record = records?.[0];
                         if (!record) return null;
-                        const filteredSubjects = Object.entries(record.subjects).filter(([k]) => !k.toLowerCase().includes('tot') && !k.toLowerCase().includes('result'));
+                        
+                        const filteredSubjects = Object.entries(record.subjects).filter(([k]) => 
+                            !k.toLowerCase().includes('tot') && 
+                            !k.toLowerCase().includes('result') &&
+                            !k.toLowerCase().includes('sgp')
+                        );
 
                         return (
-                        <Card key={semName} className={`overflow-hidden border-l-4 ${record.result === "Dropper" ? 'border-l-red-500' : record.result === "KT" ? 'border-l-orange-500' : 'border-l-green-500'}`}>
+                        <Card key={semName} className={`overflow-hidden border-l-4 ${record.hasKT ? 'border-l-red-500' : 'border-l-green-500'}`}>
                           <CardHeader className="bg-muted/30 py-3">
                             <div className="flex justify-between items-center">
                               <CardTitle className="text-base">{semName}</CardTitle>
                               <div className="flex gap-2 items-center">
                                 <Badge variant="outline">Seat: {record.seatNo}</Badge>
-                                <Badge variant={record.result === "Dropper" ? "destructive" : record.result === "KT" ? "default" : "secondary"}>{record.result}</Badge>
+                                <Badge variant={record.hasKT ? "destructive" : "secondary"}>
+                                    {record.hasKT ? "Has KT" : "Pass"}
+                                </Badge>
                               </div>
                             </div>
                           </CardHeader>
                           <CardContent className="pt-4">
                             <div className="flex flex-wrap gap-4 mb-4">
-                              <div className="p-2 bg-secondary/10 rounded border flex-1 text-center"><div className="text-xs text-muted-foreground">SGPI</div><div className="font-bold text-lg">{record.sgpi}</div></div>
-                              <div className="p-2 bg-secondary/10 rounded border flex-1 text-center"><div className="text-xs text-muted-foreground">Status</div><div className="font-bold text-lg">{record.result}</div></div>
+                              <div className="p-2 bg-secondary/10 rounded border flex-1 text-center">
+                                <div className="text-xs text-muted-foreground">SGPI</div>
+                                <div className="font-bold text-lg">{record.sgpi}</div>
+                              </div>
+                              <div className="p-2 bg-secondary/10 rounded border flex-1 text-center">
+                                <div className="text-xs text-muted-foreground">Result</div>
+                                <div className={`font-bold text-lg ${record.hasKT ? 'text-red-600' : 'text-green-600'}`}>{record.result}</div>
+                              </div>
                             </div>
+                            
                             <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                              {filteredSubjects.map(([subject, marks]) => (
-                                <div key={subject} className={`flex justify-between p-2 rounded border text-sm ${String(marks).trim() === "F" ? "bg-red-50 text-red-700 border-red-200 font-bold" : "bg-background"}`}>
-                                  <span className="truncate pr-2" title={subject}>{subject}</span><span>{marks}</span>
+                              {filteredSubjects.map(([subject, marks]) => {
+                                const marksStr = String(marks).trim().toUpperCase();
+                                const k = subject.toLowerCase().trim();
+                                
+                                // STRICT RULE: Only highlight IF it is a Grade card AND it's an F
+                                const isGradeColumn = k.includes('grade') || k.endsWith('_gr');
+                                const isFailValue = marksStr === "F" || marksStr === "ABS" || marksStr.includes("KT") || (marksStr.includes("F") && !marksStr.includes("FEM"));
+                                const isCountedKT = isGradeColumn && isFailValue;
+                                
+                                return (
+                                <div key={subject} className={`flex justify-between p-2 rounded border text-sm ${isCountedKT ? "bg-red-50 text-red-700 border-red-200 font-bold" : "bg-background"}`}>
+                                  <span className="truncate pr-2" title={subject}>{subject}</span><span>{marksStr}</span>
                                 </div>
-                              ))}
+                              )})}
                             </div>
                           </CardContent>
                         </Card>

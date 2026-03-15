@@ -19,7 +19,7 @@ interface SemesterRecord {
   totalMarks: string;
   result: string;
   hasKT: boolean;
-  subjects: Record<string, string>; // Strictly expects strings
+  subjects: Record<string, string>;
 }
 
 const StudentHistory = () => {
@@ -35,7 +35,7 @@ const StudentHistory = () => {
     setData(null);
 
     try {
-      const response = await fetch(`http://localhost:5000/api/students/history/${prn}`);
+      const response = await fetch(`http://localhost:5000/api/students/history/${prn.trim()}`);
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
         throw new Error(errData.message || "Failed to fetch data from server");
@@ -79,7 +79,6 @@ const StudentHistory = () => {
                     <div className="flex justify-between"><span className="text-muted-foreground">Name:</span><span className="font-medium">{data.profile?.name || "N/A"}</span></div>
                     <div className="flex justify-between"><span className="text-muted-foreground">PRN:</span><span className="font-medium">{data.profile?.prn || "N/A"}</span></div>
                     
-                    {/* UPDATED: Dynamic Badge Color based on Dropper status */}
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Category:</span>
                       <Badge variant={data.profile?.category === "Dropper" ? "destructive" : "outline"}>
@@ -111,31 +110,89 @@ const StudentHistory = () => {
               {Object.entries(data.academicHistory || {}).map(([semName, records]) => {
                 const record = records?.[0];
                 if (!record) return null;
+
+                let displaySgpi = String(record.sgpi || "0").trim();
+                let displayTotal = String(record.totalMarks || "0").trim();
+                let displayResult = String(record.result || "N/A").trim();
+                let displayHasKT = record.hasKT;
+
+                const actualSubjects: { name: string, marks: string }[] = [];
+
+                if (record.subjects) {
+                    for (const [key, val] of Object.entries(record.subjects)) {
+                        const sanitizedKey = key.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+                        const stringVal = String(val).trim();
+
+                        if (sanitizedKey.includes('SGP')) {
+                            // NEW RULE: Only accept the value if it's NOT a dirty zero!
+                            // This stops the old "0" from overwriting the real "9.74"
+                            if (stringVal !== "0" && stringVal !== "0.00" && stringVal !== "-" && stringVal !== "") {
+                                displaySgpi = stringVal; 
+                            }
+                        } 
+                        else if (sanitizedKey.includes('TOTAL') || sanitizedKey.includes('GRAND')) {
+                            if (stringVal !== "0" && stringVal !== "") {
+                                displayTotal = stringVal;
+                            }
+                        } 
+                        else if (sanitizedKey.includes('RESULT')) {
+                            if (stringVal !== "N/A" && stringVal !== "") {
+                                displayResult = stringVal;
+                            }
+                        } 
+                        else {
+                            // Actual subjects go into the list
+                            actualSubjects.push({ name: key, marks: stringVal });
+                        }
+                    }
+                }
+
+                const upperRes = displayResult.toUpperCase();
+                if (upperRes === 'F' || upperRes.includes('FAIL') || upperRes.includes('KT')) {
+                    displayHasKT = true;
+                } else if (upperRes === 'P' || upperRes.includes('PASS') || upperRes.includes('SUCCESSFUL')) {
+                    displayHasKT = false;
+                }
+
+                // Final safety check to make sure empty values display correctly
+                if (displaySgpi === "0" || displaySgpi === "0.00") displaySgpi = "N/A";
+                if (displayTotal === "0") displayTotal = "N/A";
+
                 return (
-                <Card key={semName} className={`overflow-hidden border-l-4 ${record.hasKT ? 'border-l-red-500' : 'border-l-green-500'}`}>
+                <Card key={semName} className={`overflow-hidden border-l-4 ${displayHasKT ? 'border-l-red-500' : 'border-l-green-500'}`}>
                   <CardHeader className="bg-muted/30 pb-3">
                     <div className="flex justify-between items-center">
                       <CardTitle>{semName}</CardTitle>
-                      {record.hasKT ? (<Badge variant="destructive">Has KT</Badge>) : (<Badge variant="secondary" className="text-green-600 bg-green-100">Pass</Badge>)}
+                      {displayHasKT ? (<Badge variant="destructive">Has KT</Badge>) : (<Badge variant="secondary" className="text-green-600 bg-green-100">Pass</Badge>)}
                     </div>
                     <CardDescription>Seat No: {record.seatNo}</CardDescription>
                   </CardHeader>
                   <CardContent className="pt-4">
+                    
                     <div className="grid grid-cols-3 gap-4 mb-4 text-center">
-                      <div className="p-2 bg-secondary/20 rounded"><div className="text-xs text-muted-foreground">SGPI</div><div className="font-bold">{record.sgpi}</div></div>
-                      <div className="p-2 bg-secondary/20 rounded"><div className="text-xs text-muted-foreground">Total Marks</div><div className="font-bold">{record.totalMarks}</div></div>
-                      <div className="p-2 bg-secondary/20 rounded"><div className="text-xs text-muted-foreground">Result</div><div className={`font-bold ${record.hasKT ? 'text-red-500' : 'text-green-600'}`}>{record.result}</div></div>
+                      <div className="p-2 bg-secondary/20 rounded border border-indigo-100 shadow-sm">
+                        <div className="text-xs text-muted-foreground font-semibold">SGPI</div>
+                        <div className="font-bold text-lg text-indigo-700">{displaySgpi}</div>
+                      </div>
+                      <div className="p-2 bg-secondary/20 rounded">
+                        <div className="text-xs text-muted-foreground">Total Marks</div>
+                        <div className="font-bold text-lg">{displayTotal}</div>
+                      </div>
+                      <div className="p-2 bg-secondary/20 rounded">
+                        <div className="text-xs text-muted-foreground">Result</div>
+                        <div className={`font-bold text-lg ${displayHasKT ? 'text-red-600' : 'text-green-600'}`}>{displayResult}</div>
+                      </div>
                     </div>
 
                     <div className="mt-4">
                       <h4 className="text-sm font-semibold mb-2">Subject Performance:</h4>
                       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-                        {Object.entries(record.subjects || {}).map(([subject, marksStr]) => {
-                           const isSubjectFail = marksStr.includes('F') || marksStr === "0"; 
+                        {actualSubjects.map((sub, idx) => {
+                           const isSubjectFail = sub.marks.includes('F') || sub.marks === "0" || sub.marks === "0.00" || sub.marks.includes('KT'); 
                            return (
-                            <div key={subject} className={`flex justify-between items-center text-sm p-2 rounded border ${isSubjectFail ? 'bg-red-50 border-red-200' : 'bg-background'}`}>
-                              <span className="truncate pr-2" title={subject}>{subject}</span>
-                              <span className="font-mono font-medium">{marksStr}</span>
+                            <div key={idx} className={`flex justify-between items-center text-sm p-2 rounded border ${isSubjectFail ? 'bg-red-50 border-red-200' : 'bg-background'}`}>
+                              <span className="truncate pr-2" title={sub.name}>{sub.name}</span>
+                              <span className="font-mono font-medium">{sub.marks}</span>
                             </div>
                            );
                         })}
