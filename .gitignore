@@ -30,3 +30,4 @@ frontend/node_modules
 frontend/dist
 frontend/env
 node_modules_main/
+.venv

@@ -26,6 +26,7 @@ import Sem2Analysis from "./components/Sem2Analysis";
 import Sem7Analysis from "./components/Sem7Analysis";
 import StudentHistory from "./components/StudentHistory";
 import IsolatedPdfConverter from "./components/IsolatedPdfConverter";
+import MLAnalysis from "./components/MLAnalysis";
 
 const queryClient = new QueryClient();
 
@@ -37,6 +38,8 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Landing />} />
+          <Route path="/ml-analysis" element={<MLAnalysis />} />
+
           <Route path="/home" element={<Home />} />
           <Route path="/year1" element={<Year1 />} />
           <Route path="/year2" element={<Year2 />} />

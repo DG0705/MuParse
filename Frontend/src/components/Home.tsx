@@ -14,6 +14,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import axios from "axios";
+import { AnalyticsDashboard } from "./AnalyticsDashboard";
+import { MLInsightCard } from "./MLInsightCard";
 
 // --- Interfaces ---
 interface StudentData {
@@ -420,6 +422,14 @@ const Home = () => {
                       </Card>
                     </div>
 
+{/* AI Prediction Card */}
+<div className="mt-6">
+  {studentData?.profile?.prn && (
+    <MLInsightCard prn={studentData.profile.prn} />
+  )}
+</div>
+
+
                     <Separator className="my-6" />
                     <h3 className="text-xl font-bold flex items-center gap-2"><GraduationCap className="h-5 w-5 text-primary" /> Semester Breakdown</h3>
                     
@@ -508,6 +518,16 @@ const Home = () => {
               ))}
             </div>
           </TabsContent>
+
+
+{/* ==================== 4. ANALYSIS TAB ==================== */}
+          <TabsContent value="analysis" className="animate-in fade-in-50">
+            <div className="bg-white rounded-xl shadow-sm border p-4">
+               {/* This will render the beautiful Pie Charts and Bar Charts! */}
+               <AnalyticsDashboard />
+            </div>
+          </TabsContent>
+
 
         </Tabs>
       </main>
