@@ -8,6 +8,38 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 import { MLInsightCard } from "./MLInsightCard";
 
+// --- DICTIONARY FOR FIRST YEAR MAPPING ---
+const semesterSubjectMap: Record<string, Record<string, string>> = {
+  "1": {
+      "paper1": "Engineering Mathematics - I",
+      "paper2": "Engineering Mathematics - I (TW)",
+      "paper3": "Engineering Physics - I",
+      "paper4": "Engineering Physics - I (TW)",
+      "paper5": "Engineering Chemistry - I",
+      "paper6": "Engineering Chemistry - I (TW)",
+      "paper7": "Engineering Mechanics",
+      "paper8": "Engineering Mechanics (TW/OR)",
+      "paper9": "Basic Electrical Engineering",
+      "paper10": "Basic Electrical Engineering (TW/OR)",
+      "paper11": "Basic Workshop Practice - I"
+  },
+  "2": {
+      "paper1": "Engineering Mathematics - II",
+      "paper2": "Engineering Mathematics - II (TW)",
+      "paper3": "Engineering Physics - II",
+      "paper4": "Engineering Physics - II (TW)",
+      "paper5": "Engineering Chemistry - II",
+      "paper6": "Engineering Chemistry - II (TW)",
+      "paper7": "Engineering Graphics",
+      "paper8": "Engineering Graphics (TW/Orl)",
+      "paper9": "C Programming",
+      "paper10": "C Programming (TW/Orl)",
+      "paper11": "Professional Comm. & Ethics - I",
+      "paper12": "Professional Comm. & Ethics - I (TW)",
+      "paper13": "Basic Workshop Practice - II"
+  }
+};
+
 interface StudentData {
   profile: { name: string; prn: string; category: string; };
   summary: { totalSemestersAppeared: number; activeKTs: string; ktCount: number; };
@@ -79,7 +111,6 @@ const StudentHistory = () => {
                   <div className="space-y-2">
                     <div className="flex justify-between"><span className="text-muted-foreground">Name:</span><span className="font-medium">{data.profile?.name || "N/A"}</span></div>
                     <div className="flex justify-between"><span className="text-muted-foreground">PRN:</span><span className="font-medium">{data.profile?.prn || "N/A"}</span></div>
-                    
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Category:</span>
                       <Badge variant={data.profile?.category === "Dropper" ? "destructive" : "outline"}>
@@ -103,12 +134,9 @@ const StudentHistory = () => {
               </Card>
             </div>
 
-<div className="my-6 w-full">
-  {data?.profile?.prn && (
-    <MLInsightCard prn={data.profile.prn} />
-
-  )}
-</div>
+            <div className="my-6 w-full">
+              {data?.profile?.prn && <MLInsightCard prn={data.profile.prn} />}
+            </div>
 
             <Separator />
 
@@ -119,40 +147,109 @@ const StudentHistory = () => {
                 const record = records?.[0];
                 if (!record) return null;
 
+                const semMatch = semName.match(/\d+/);
+                const semNum = semMatch ? semMatch[0] : "Unknown";
+
                 let displaySgpi = String(record.sgpi || "0").trim();
                 let displayTotal = String(record.totalMarks || "0").trim();
                 let displayResult = String(record.result || "N/A").trim();
                 let displayHasKT = record.hasKT;
 
-                const actualSubjects: { name: string, marks: string }[] = [];
+                // Array to hold subjects for ALL semesters
+                const actualSubjects: { name: string, marks: string, grade?: string, isFail: boolean }[] = [];
 
                 if (record.subjects) {
-                    for (const [key, val] of Object.entries(record.subjects)) {
-                        const sanitizedKey = key.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-                        const stringVal = String(val).trim();
+                  // ==========================================
+                  // 🟢 SCENARIO 1: SMART PARSER FOR SEM 1 & 2
+                  // ==========================================
+                  if (semNum === "1" || semNum === "2") {
+                    const actualSubjectsMap = new Map<string, { marks: string, grade: string, isFail: boolean }>();
 
-                        if (sanitizedKey.includes('SGP')) {
-                            // NEW RULE: Only accept the value if it's NOT a dirty zero!
-                            // This stops the old "0" from overwriting the real "9.74"
-                            if (stringVal !== "0" && stringVal !== "0.00" && stringVal !== "-" && stringVal !== "") {
-                                displaySgpi = stringVal; 
-                            }
-                        } 
-                        else if (sanitizedKey.includes('TOTAL') || sanitizedKey.includes('GRAND')) {
-                            if (stringVal !== "0" && stringVal !== "") {
-                                displayTotal = stringVal;
-                            }
-                        } 
-                        else if (sanitizedKey.includes('RESULT')) {
-                            if (stringVal !== "N/A" && stringVal !== "") {
-                                displayResult = stringVal;
-                            }
-                        } 
-                        else {
-                            // Actual subjects go into the list
-                            actualSubjects.push({ name: key, marks: stringVal });
+                    for (const [key, val] of Object.entries(record.subjects)) {
+                      const stringVal = String(val).trim();
+                      const upperKey = key.toUpperCase();
+                      const lowerKey = key.toLowerCase();
+
+                      if (["ABCID", "IS_DIPLOMA_STUDENT", "CGPI"].includes(upperKey)) continue;
+
+                      if (upperKey.includes('SGP')) {
+                        if (stringVal !== "0" && stringVal !== "0.00" && stringVal !== "-" && stringVal !== "") displaySgpi = stringVal;
+                        continue;
+                      }
+                      if (upperKey === 'TOTAL' || upperKey === 'GRAND TOTAL' || upperKey === 'TOTAL MARKS') {
+                        if (stringVal !== "0" && stringVal !== "") displayTotal = stringVal;
+                        continue;
+                      }
+                      if (upperKey.includes('RESULT')) {
+                        if (stringVal !== "N/A" && stringVal !== "") displayResult = stringVal;
+                        continue;
+                      }
+
+                      let readableName = key;
+                      let isGrade = false;
+                      let isMarks = false;
+
+                      if (lowerKey.startsWith('paper')) {
+                        const paperMatch = lowerKey.match(/paper(\d+)/);
+                        if (paperMatch) {
+                          const pNum = paperMatch[1];
+                          readableName = semesterSubjectMap[semNum]?.[`paper${pNum}`] || `Subject ${pNum}`;
+                          if (lowerKey.endsWith('gr') || lowerKey.endsWith('grade')) isGrade = true;
+                          if (lowerKey.endsWith('marks') || lowerKey.endsWith('total')) isMarks = true;
                         }
+                      }
+
+                      if (!actualSubjectsMap.has(readableName)) {
+                        actualSubjectsMap.set(readableName, { marks: "", grade: "", isFail: false });
+                      }
+
+                      const subData = actualSubjectsMap.get(readableName)!;
+
+                      if (isGrade) subData.grade = stringVal;
+                      else if (isMarks) { if (stringVal !== "0") subData.marks = stringVal; }
+                      else { if (stringVal !== "0" && !subData.marks) subData.marks = stringVal; }
+
+                      if (/^\d*F$|^AB$|^ABSENT$/i.test(stringVal) || stringVal.toUpperCase() === 'F') {
+                        subData.isFail = true;
+                      }
                     }
+
+                    // Push the nicely formatted Sem 1 & 2 subjects into the array
+                    actualSubjects.push(...Array.from(actualSubjectsMap.entries()).map(([name, data]) => ({
+                      name, marks: data.marks, grade: data.grade, isFail: data.isFail
+                    })));
+
+                  }
+                  // ==========================================
+                  // 🔵 SCENARIO 2: RAW DISPLAY FOR SEM 3 TO 8
+                  // ==========================================
+                  else {
+                    for (const [key, val] of Object.entries(record.subjects)) {
+                      const stringVal = String(val).trim();
+                      const upperKey = key.toUpperCase();
+
+                      if (["ABCID", "IS_DIPLOMA_STUDENT", "CGPI"].includes(upperKey)) continue;
+
+                      if (upperKey.includes('SGP')) {
+                        if (stringVal !== "0" && stringVal !== "0.00" && stringVal !== "-" && stringVal !== "") displaySgpi = stringVal;
+                        continue;
+                      }
+                      if (upperKey === 'TOTAL' || upperKey === 'GRAND TOTAL' || upperKey === 'TOTAL MARKS') {
+                        if (stringVal !== "0" && stringVal !== "") displayTotal = stringVal;
+                        continue;
+                      }
+                      if (upperKey.includes('RESULT')) {
+                        if (stringVal !== "N/A" && stringVal !== "") displayResult = stringVal;
+                        continue;
+                      }
+
+                      // Check if this specific raw subject is a failure
+                      const isFail = /^\d*F$|^AB$|^ABSENT$/i.test(stringVal) || stringVal.toUpperCase() === 'F';
+
+                      // Push directly without hiding anything or fusing grades
+                      actualSubjects.push({ name: key, marks: stringVal, isFail: isFail });
+                    }
+                  }
                 }
 
                 const upperRes = displayResult.toUpperCase();
@@ -162,7 +259,6 @@ const StudentHistory = () => {
                     displayHasKT = false;
                 }
 
-                // Final safety check to make sure empty values display correctly
                 if (displaySgpi === "0" || displaySgpi === "0.00") displaySgpi = "N/A";
                 if (displayTotal === "0") displayTotal = "N/A";
 
@@ -194,16 +290,24 @@ const StudentHistory = () => {
 
                     <div className="mt-4">
                       <h4 className="text-sm font-semibold mb-2">Subject Performance:</h4>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-                        {actualSubjects.map((sub, idx) => {
-                           const isSubjectFail = sub.marks.includes('F') || sub.marks === "0" || sub.marks === "0.00" || sub.marks.includes('KT'); 
-                           return (
-                            <div key={idx} className={`flex justify-between items-center text-sm p-2 rounded border ${isSubjectFail ? 'bg-red-50 border-red-200' : 'bg-background'}`}>
-                              <span className="truncate pr-2" title={sub.name}>{sub.name}</span>
-                              <span className="font-mono font-medium">{sub.marks}</span>
-                            </div>
-                           );
-                        })}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                        {actualSubjects.map((sub, idx) => (
+                           <div key={idx} className={`flex justify-between items-center p-2 rounded border text-sm ${sub.isFail ? 'bg-red-50 border-red-200' : 'bg-background'}`}>
+                             <span className={`truncate pr-2 ${sub.isFail ? 'font-bold text-red-700' : 'font-medium text-slate-700'}`} title={sub.name}>
+                               {sub.name}
+                             </span>
+                             <div className="flex items-center gap-2 min-w-[70px] justify-end">
+                               <span className={`font-mono ${sub.isFail ? 'font-bold text-red-600' : 'font-bold text-slate-600'}`}>
+                                 {sub.marks || "-"}
+                               </span>
+                               {sub.grade && (
+                                 <Badge variant="outline" className={`px-1.5 py-0 text-[10px] h-5 ${sub.isFail ? 'border-red-300 text-red-600 bg-red-100' : 'border-slate-200 text-slate-500 bg-slate-100'}`}>
+                                   {sub.grade}
+                                 </Badge>
+                               )}
+                             </div>
+                           </div>
+                        ))}
                       </div>
                     </div>
                   </CardContent>

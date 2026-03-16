@@ -40,7 +40,7 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Landing />} />
-          <Route path="/ml-analysis" element={<MLAnalysis />} />
+          {/* <Route path="/ml-analysis" element={<MLAnalysis />} /> */}
 
           <Route path="/home" element={<Home />} />
           <Route path="/year1" element={<Year1 />} />
