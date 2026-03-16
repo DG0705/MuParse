@@ -9,17 +9,22 @@ import { FileSpreadsheet, Upload, BarChart3, Database } from "lucide-react";
 import SubjectAnalysisReport from "./SubjectAnalysisReport";
 
 const SUBJECT_RULES: { name: string; components: string[]; shortName: string }[] = [
-    { name: "DATA MINING AND BUSINESS INTELLIGENCE", components: ["ESE", "IA", "TOT"], shortName: "ENGG MATHS - IV" },
-    { name: "COMPUTER NETWORK SECURITY", components: ["ESE", "IA", "TOT"], shortName: "CNND" },
-    { name: "ENTREPRENEURSHIP AND E-BUSINESS", components: ["ESE", "IA", "TOT"], shortName: "OS" },
-    { name: "SOFTWARE ENGINEERING ", components: ["ESE", "IA", "TOT"], shortName: "AT" },
-    { name: "DEPARTMENT OPTIONAL SUBJECT", components: ["ESE", "IA", "TOT"], shortName: "COA" },
-    { name: "IP LAB", components: ["PR OR", "TW", "TOT"], shortName: "IP LAB" },
-    { name: "SECURITY LAB", components: ["PR OR", "TW", "TOT"], shortName: "SECURITY LAB" },
-    { name: "DevOPs LAB", components: ["PR OR", "TW", "TOT"], shortName: "DevOPs LAB" },
-    { name: "ADVANCE DevOPs LAB", components: ["PR OR", "TW", "TOT"], shortName: "ADVANCE DevOPs LAB" },
-    { name: "PROFESSIONAL COMMUNICATION AND ETHICS - II (PCE-II)", components: ["PR OR", "TW", "TOT"], shortName: "PCE-II"},
-    { name: "MINI PROJECT - 2 A WEB BASED BUSINESS MODEL ", components: ["PR OR", "TW", "TOT"], shortName: "MINI PROJECT 1C" },
+    // --- CORE SUBJECTS ---
+    { name: "DATA MINING AND BUSINESS INTELLIGENCE", components: ["ESE", "IA", "TOT"], shortName: "DMBI" },
+    { name: "WEB X.0", components: ["ESE", "IA", "TOT"], shortName: "WEB X" },
+    { name: "WIRELESS TECHNOLOGY", components: ["ESE", "IA", "TOT"], shortName: "WT" },
+    { name: "AI AND DATA SCIENCE - 1", components: ["ESE", "IA", "TOT"], shortName: "AI AND DS-1" },
+    
+    // --- ELECTIVE (Make sure this 'name' matches exactly what is printed in your Sem 6 PDF) ---
+    { name: "DEPARTMENT OPTIONAL SUBJECT", components: ["ESE", "IA", "TOT"], shortName: "ELECTIVE-II" }, 
+    
+    // --- LABS & PRACTICALS ---
+    { name: "BI LAB", components: ["PR OR", "TW", "TOT"], shortName: "BI LAB" },
+    { name: "WEB LAB", components: ["PR OR", "TW", "TOT"], shortName: "WEB LAB" },
+    { name: "SENSOR LAB", components: ["PR OR", "TW", "TOT"], shortName: "SENSOR LAB" },
+    { name: "MAD AND PWA LAB", components: ["PR OR", "TW", "TOT"], shortName: "MAD PWA LAB" },
+    { name: "DS USING PYTHON LAB", components: ["PR OR", "TW", "TOT"], shortName: "DS PYTHON LAB" },
+    { name: "MINI PROJECT - 2 B", components: ["PR OR", "TW", "TOT"], shortName: "MINI PROJECT 2B" }
 ];
 
 const EXPECTED_COMPONENT_COUNT = 33;

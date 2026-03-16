@@ -27,6 +27,8 @@ import Sem7Analysis from "./components/Sem7Analysis";
 import StudentHistory from "./components/StudentHistory";
 import IsolatedPdfConverter from "./components/IsolatedPdfConverter";
 import MLAnalysis from "./components/MLAnalysis";
+import Sem1BlockConverter from "./components/Sem1BlockConverter";
+import Sem2BlockConverter from "./components/Sem2BlockConverter";
 
 const queryClient = new QueryClient();
 
@@ -51,6 +53,11 @@ const App = () => (
             path="/isolated-converter"
             element={<IsolatedPdfConverter />}
           />
+
+          <Route path="/sem1block-converter" element={<Sem1BlockConverter />} />
+          <Route path="/sem2block-converter" element={<Sem2BlockConverter />} />
+
+
           <Route path="/student-history" element={<StudentHistory />} />
           <Route
             path="/sem3-converter"

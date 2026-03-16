@@ -20,6 +20,20 @@ const Year1 = () => {
       color: "from-cyan-500 to-teal-500"
     },
     {
+      title: "Semester 1 - Block PDF Converter",
+      description: "Convert Semester 1 result PDFs to structured CSV format",
+      icon: FileText,
+      path: "/sem1block-converter",
+      color: "from-blue-500 to-cyan-500"
+    },
+    {
+      title: "Semester 2 - Block PDF Converter",
+      description: "Convert Semester 1 result PDFs to structured CSV format",
+      icon: FileText,
+      path: "/sem2block-converter",
+      color: "from-blue-500 to-cyan-500"
+    },
+    {
       title: "Semester 1 - Result Analysis",
       description: "Upload CSV and generate comprehensive result analysis",
       icon: BarChart3,

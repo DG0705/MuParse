@@ -31,3 +31,6 @@ frontend/dist
 frontend/env
 node_modules_main/
 .venv
+ml_engine/.env
+
+

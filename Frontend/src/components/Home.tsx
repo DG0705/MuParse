@@ -186,6 +186,7 @@ const Home = () => {
       setNepSemester("");
     } catch (error: any) {
       toast.error(error.response?.data?.error || "Error uploading NEP PDF");
+      console.log(error)
     } finally {
       setIsNepProcessing(false);
     }

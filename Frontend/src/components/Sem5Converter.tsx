@@ -8,17 +8,17 @@ import { FileSpreadsheet, Upload, BarChart3, Database } from "lucide-react";
 import SubjectAnalysisReport from "./SubjectAnalysisReport";
 
 const SUBJECT_RULES: { name: string; components: string[]; shortName: string }[] = [
-    { name: "INTERNET PROGRAMMING", components: ["ESE", "IA", "TOT"], shortName: "ENGG MATHS - IV" },
-    { name: "COMPUTER NETWORK SECURITY", components: ["ESE", "IA", "TOT"], shortName: "CNND" },
-    { name: "ENTREPRENEURSHIP AND E-BUSINESS", components: ["ESE", "IA", "TOT"], shortName: "OS" },
-    { name: "SOFTWARE ENGINEERING ", components: ["ESE", "IA", "TOT"], shortName: "AT" },
-    { name: "DEPARTMENT OPTIONAL SUBJECT", components: ["ESE", "IA", "TOT"], shortName: "COA" },
+   { name: "INTERNET PROGRAMMING", components: ["ESE", "IA", "TOT"], shortName: "IP" },
+    { name: "COMPUTER NETWORK SECURITY", components: ["ESE", "IA", "TOT"], shortName: "CNS" },
+    { name: "ENTREPRENEURSHIP AND E-BUSINESS", components: ["ESE", "IA", "TOT"], shortName: "EEB" },
+    { name: "SOFTWARE ENGINEERING ", components: ["ESE", "IA", "TOT"], shortName: "SE" },
+    { name: "DEPARTMENT OPTIONAL SUBJECT", components: ["ESE", "IA", "TOT"], shortName: "ADSA" }, 
     { name: "IP LAB", components: ["PR OR", "TW", "TOT"], shortName: "IP LAB" },
     { name: "SECURITY LAB", components: ["PR OR", "TW", "TOT"], shortName: "SECURITY LAB" },
     { name: "DevOPs LAB", components: ["PR OR", "TW", "TOT"], shortName: "DevOPs LAB" },
-    { name: "ADVANCE DevOPs LAB", components: ["PR OR", "TW", "TOT"], shortName: "ADVANCE DevOPs LAB" },
+    { name: "ADVANCE DevOPs LAB", components: ["PR OR", "TW", "TOT"], shortName: "ADV DevOPs LAB" },
     { name: "PROFESSIONAL COMMUNICATION AND ETHICS - II (PCE-II)", components: ["PR OR", "TW", "TOT"], shortName: "PCE-II"},
-    { name: "MINI PROJECT - 2 A WEB BASED BUSINESS MODEL ", components: ["PR OR", "TW", "TOT"], shortName: "MINI PROJECT 1C" },
+    { name: "MINI PROJECT - 2 A WEB BASED BUSINESS MODEL ", components: ["PR OR", "TW", "TOT"], shortName: "MINI PROJECT 2A" }
 ];
 
 const EXPECTED_COMPONENT_COUNT = 33;
