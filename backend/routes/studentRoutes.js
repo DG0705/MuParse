@@ -5,25 +5,23 @@ const router = express.Router();
 const {
   uploadCsvData,
   uploadNepPdfData,
-  uploadAtktCsvData, 
+  uploadAtktCsvData,
   getStudents,
   getStudentHistory,
   getStudentsByBatch,
   mergeStudents,
 } = require("../controllers/studentController");
 
-
 const { getStudentMLInsights } = require("../controllers/mlController");
 const { getBatchAnalytics } = require("../controllers/analyticsController.js");
-const analyticsController = require('../controllers/analyticsController'); // Adjust path if needed
+const analyticsController = require("../controllers/analyticsController"); // Adjust path if needed
 const upload = multer({ storage: multer.memoryStorage() });
 
 // File Upload Routes
 router.post("/upload-csv", upload.single("file"), uploadCsvData);
-router.post("/upload-atkt-csv", upload.single("file"), uploadAtktCsvData); 
+router.post("/upload-atkt-csv", upload.single("file"), uploadAtktCsvData);
 router.post("/upload-nep-pdf", upload.single("file"), uploadNepPdfData);
 router.post("/:prn/ml-insights", getStudentMLInsights);
-
 
 // Utility Routes
 router.post("/merge", mergeStudents);
@@ -32,8 +30,8 @@ router.get("/history/:prn", getStudentHistory);
 router.get("/batch/:batch", getStudentsByBatch);
 router.get("/analytics/batch", getBatchAnalytics);
 router.get("/analytics/batch", analyticsController.getBatchAnalytics);
-
-
+router.get("/analytics/golden", analyticsController.getGoldenStudents);
+router.get("/analytics/golden1", analyticsController.getGoldenStudents1);
 
 const { spawn } = require("child_process");
 

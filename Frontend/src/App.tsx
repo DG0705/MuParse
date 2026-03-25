@@ -29,6 +29,8 @@ import IsolatedPdfConverter from "./components/IsolatedPdfConverter";
 import MLAnalysis from "./components/MLAnalysis";
 import Sem1BlockConverter from "./components/Sem1BlockConverter";
 import Sem2BlockConverter from "./components/Sem2BlockConverter";
+import { GoldenStudentReport } from "./components/GoldenStudentReport";
+import GoldenStudentReport1 from "./components/GoldenStudentReport1";
 
 const queryClient = new QueryClient();
 
@@ -41,7 +43,6 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Landing />} />
           {/* <Route path="/ml-analysis" element={<MLAnalysis />} /> */}
-
           <Route path="/home" element={<Home />} />
           <Route path="/year1" element={<Year1 />} />
           <Route path="/year2" element={<Year2 />} />
@@ -53,11 +54,8 @@ const App = () => (
             path="/isolated-converter"
             element={<IsolatedPdfConverter />}
           />
-
           <Route path="/sem1block-converter" element={<Sem1BlockConverter />} />
           <Route path="/sem2block-converter" element={<Sem2BlockConverter />} />
-
-
           <Route path="/student-history" element={<StudentHistory />} />
           <Route
             path="/sem3-converter"
@@ -101,6 +99,8 @@ const App = () => (
           <Route path="/sem2-analysis" element={<Sem2Analysis />} />
           <Route path="/sem7-analysis" element={<Sem7Analysis />} />
           <Route path="/sem8-analysis" element={<Sem8Analysis />} />
+          <Route path="/golden-students" element={<GoldenStudentReport />} />
+          <Route path="/golden-students1" element={<GoldenStudentReport1 />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
