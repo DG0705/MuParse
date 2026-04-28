@@ -1,7 +1,7 @@
 const Papa = require("papaparse");
 const { spawn } = require("child_process");
 const path = require("path");
-const fs = require('fs');
+const fs = require("fs");
 const StudentMaster = require("../models/StudentMaster");
 const AcademicRecord = require("../models/AcademicRecord");
 const NepAcademicRecord = require("../models/NepAcademicRecord");
@@ -9,22 +9,40 @@ const NepAcademicRecord = require("../models/NepAcademicRecord");
 // --- NEP PROCESSOR ---
 const uploadNepPdfData = async (req, res) => {
   try {
-    if (!req.file) return res.status(400).json({ message: "Upload an NEP file." });
+    if (!req.file)
+      return res.status(400).json({ message: "Upload an NEP file." });
 
-    const isCSV = req.file.originalname.toLowerCase().endsWith('.csv') || req.file.mimetype === 'text/csv' || req.file.mimetype === 'application/vnd.ms-excel';
+    const isCSV =
+      req.file.originalname.toLowerCase().endsWith(".csv") ||
+      req.file.mimetype === "text/csv" ||
+      req.file.mimetype === "application/vnd.ms-excel";
 
     if (isCSV) {
       const csvString = req.file.buffer.toString();
-      const { data } = Papa.parse(csvString, { header: true, skipEmptyLines: true });
+      const { data } = Papa.parse(csvString, {
+        header: true,
+        skipEmptyLines: true,
+      });
 
       const nepAcademicOps = [];
 
       data.forEach((s) => {
         const seatNo = s["seat_no"] || s["Seat_No"] || s["Seat No"];
-        if (!seatNo) return; 
+        if (!seatNo) return;
 
         const subjects = {};
-        const coreFields = ["seat_no", "seat no", "name", "gender", "total_marks", "result", "sgpi", "college_code", "college_name", "prn"];
+        const coreFields = [
+          "seat_no",
+          "seat no",
+          "name",
+          "gender",
+          "total_marks",
+          "result",
+          "sgpi",
+          "college_code",
+          "college_name",
+          "prn",
+        ];
         Object.keys(s).forEach((key) => {
           if (!coreFields.includes(key.toLowerCase().trim())) {
             subjects[key] = s[key];
@@ -33,17 +51,20 @@ const uploadNepPdfData = async (req, res) => {
 
         nepAcademicOps.push({
           updateOne: {
-            filter: { seatNo: seatNo.toString().trim(), semester: req.body.semester || 1 },
+            filter: {
+              seatNo: seatNo.toString().trim(),
+              semester: req.body.semester || 1,
+            },
             update: {
-              $set: { 
+              $set: {
                 name: s["name"] || s["Name"] || "Unknown",
                 gender: s["gender"] || s["Gender"] || "Unknown",
                 collegeCode: s["college_code"] || "",
                 collegeName: s["college_name"] || "",
-                sgpi: s["sgpi"] || s["SGPI"] || "0", 
-                totalMarks: s["total_marks"] || s["Total Marks"] || "0", 
-                finalResult: s["result"] || s["Result"] || "N/A", 
-                subjects: subjects 
+                sgpi: s["sgpi"] || s["SGPI"] || "0",
+                totalMarks: s["total_marks"] || s["Total Marks"] || "0",
+                finalResult: s["result"] || s["Result"] || "N/A",
+                subjects: subjects,
               },
             },
             upsert: true,
@@ -51,21 +72,31 @@ const uploadNepPdfData = async (req, res) => {
         });
       });
 
-      if (nepAcademicOps.length > 0) await NepAcademicRecord.bulkWrite(nepAcademicOps);
-      return res.json({ success: true, message: `NEP CSV Processed. Saved to Dedicated NEP Database.`, students: data });
+      if (nepAcademicOps.length > 0)
+        await NepAcademicRecord.bulkWrite(nepAcademicOps);
+      return res.json({
+        success: true,
+        message: `NEP CSV Processed. Saved to Dedicated NEP Database.`,
+        students: data,
+      });
     }
 
     // --- FALLBACK TO PYTHON ---
     const tempDir = path.join(__dirname, "../../nep_analysis/temp");
     if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
-    
+
     const tempFilePath = path.join(tempDir, `upload_${Date.now()}.pdf`);
     fs.writeFileSync(tempFilePath, req.file.buffer);
 
-    const pythonScript = path.join(__dirname, "../../nep_analysis/parser_bridge.py");
-    
+    const pythonScript = path.join(
+      __dirname,
+      "../../nep_analysis/parser_bridge.py",
+    );
+
     if (!fs.existsSync(pythonScript)) {
-      return res.status(500).json({ error: `Cannot find Python script at: ${pythonScript}` });
+      return res
+        .status(500)
+        .json({ error: `Cannot find Python script at: ${pythonScript}` });
     }
 
     const pythonProcess = spawn("python", [pythonScript, tempFilePath]);
@@ -73,37 +104,49 @@ const uploadNepPdfData = async (req, res) => {
     let resultData = "";
     let pythonErrorText = "";
 
-    pythonProcess.stdout.on("data", (data) => { resultData += data.toString(); });
-    pythonProcess.stderr.on("data", (data) => { pythonErrorText += data.toString(); });
+    pythonProcess.stdout.on("data", (data) => {
+      resultData += data.toString();
+    });
+    pythonProcess.stderr.on("data", (data) => {
+      pythonErrorText += data.toString();
+    });
 
     pythonProcess.on("close", async (code) => {
       try {
         if (fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath);
-        if (code !== 0) return res.status(500).json({ error: `Python crashed: ${pythonErrorText.substring(0, 150)}...` });
+        if (code !== 0)
+          return res.status(500).json({
+            error: `Python crashed: ${pythonErrorText.substring(0, 150)}...`,
+          });
 
         let students;
         try {
           students = JSON.parse(resultData);
         } catch (jsonErr) {
-          return res.status(500).json({ error: `Python output was not valid JSON.` });
+          return res
+            .status(500)
+            .json({ error: `Python output was not valid JSON.` });
         }
 
-        const nepAcademicOps = []; 
+        const nepAcademicOps = [];
 
         for (const data of students) {
           nepAcademicOps.push({
             updateOne: {
-              filter: { seatNo: data.seat_no, semester: req.body.semester || 1 },
+              filter: {
+                seatNo: data.seat_no,
+                semester: req.body.semester || 1,
+              },
               update: {
-                $set: { 
+                $set: {
                   name: data.name || "Unknown",
                   gender: data.gender || "Unknown",
                   collegeCode: data.college_code || "",
                   collegeName: data.college_name || "",
-                  sgpi: data.sgpi, 
-                  totalMarks: data.total_marks, 
-                  finalResult: data.result, 
-                  subjects: data.subjects || {}
+                  sgpi: data.sgpi,
+                  totalMarks: data.total_marks,
+                  finalResult: data.result,
+                  subjects: data.subjects || {},
                 },
               },
               upsert: true,
@@ -111,8 +154,13 @@ const uploadNepPdfData = async (req, res) => {
           });
         }
 
-        if (nepAcademicOps.length > 0) await NepAcademicRecord.bulkWrite(nepAcademicOps);
-        res.json({ success: true, message: `NEP PDF Processed & Saved to Dedicated NEP Table.`, students });
+        if (nepAcademicOps.length > 0)
+          await NepAcademicRecord.bulkWrite(nepAcademicOps);
+        res.json({
+          success: true,
+          message: `NEP PDF Processed & Saved to Dedicated NEP Table.`,
+          students,
+        });
       } catch (dbError) {
         res.status(500).json({ error: `Database error: ${dbError.message}` });
       }
@@ -125,24 +173,33 @@ const uploadNepPdfData = async (req, res) => {
 // --- R-19 CSV PROCESSOR ---
 const uploadCsvData = async (req, res) => {
   try {
-    if (!req.file) return res.status(400).json({ message: "Upload a CSV file." });
+    if (!req.file)
+      return res.status(400).json({ message: "Upload a CSV file." });
     const csvString = req.file.buffer.toString();
-    const { data } = Papa.parse(csvString, { header: true, skipEmptyLines: true });
+    const { data } = Papa.parse(csvString, {
+      header: true,
+      skipEmptyLines: true,
+    });
 
     const semNum = Number(req.body.semester);
-    if (!semNum) return res.status(400).json({ message: "Semester number is required." });
+    if (!semNum)
+      return res.status(400).json({ message: "Semester number is required." });
 
     const masterOps = [];
     const academicOps = [];
 
     data.forEach((s) => {
-      const seatKey = Object.keys(s).find((k) => k.trim() === "Seat No" || k.trim() === "Seat_No");
-      const cleanSeatNo = (seatKey ? s[seatKey] : "").toString().replace(/[^0-9]/g, "");
+      const seatKey = Object.keys(s).find(
+        (k) => k.trim() === "Seat No" || k.trim() === "Seat_No",
+      );
+      const cleanSeatNo = (seatKey ? s[seatKey] : "")
+        .toString()
+        .replace(/[^0-9]/g, "");
       const rawPRN = (s["PRN"] || "").toString().replace(/[^0-9]/g, "");
       if (!cleanSeatNo) return;
 
       const finalPRN = rawPRN || `TEMP_${cleanSeatNo}`;
-      
+
       // 1. Extract using BOTH variations
       const extractedSGPI = s["SGPI"] || s["SGPA"] || "0";
       const extractedTotal = s["Grand_Total"] || s["Total Marks"] || "0";
@@ -150,15 +207,32 @@ const uploadCsvData = async (req, res) => {
 
       const flatSubjects = {};
       // 2. Exclude BOTH variations so they don't end up in the subjects list
-      const excludedKeys = ["seat no", "seat_no", "prn", "name", "gender", "result", "final result", "sgpi", "sgpa", "grand_total", "total marks", "remark"];
+      const excludedKeys = [
+        "seat no",
+        "seat_no",
+        "prn",
+        "name",
+        "gender",
+        "result",
+        "final result",
+        "sgpi",
+        "sgpa",
+        "grand_total",
+        "total marks",
+        "remark",
+      ];
       Object.keys(s).forEach((key) => {
-        if (!excludedKeys.includes(key.toLowerCase().trim())) flatSubjects[key] = s[key];
+        if (!excludedKeys.includes(key.toLowerCase().trim()))
+          flatSubjects[key] = s[key];
       });
 
       masterOps.push({
         updateOne: {
           filter: { prn: finalPRN },
-          update: { $set: { gender: s["Gender"] || "" }, $setOnInsert: { name: s["Name"] || "Unknown" } },
+          update: {
+            $set: { gender: s["Gender"] || "" },
+            $setOnInsert: { name: s["Name"] || "Unknown" },
+          },
           upsert: true,
         },
       });
@@ -168,12 +242,12 @@ const uploadCsvData = async (req, res) => {
           filter: { prn: finalPRN, semester: semNum },
           update: {
             // 3. Save the properly extracted values
-            $set: { 
-              seatNo: cleanSeatNo, 
-              sgpi: extractedSGPI, 
-              totalMarks: extractedTotal, 
-              finalResult: extractedResult, 
-              subjects: flatSubjects 
+            $set: {
+              seatNo: cleanSeatNo,
+              sgpi: extractedSGPI,
+              totalMarks: extractedTotal,
+              finalResult: extractedResult,
+              subjects: flatSubjects,
             },
           },
           upsert: true,
@@ -184,16 +258,21 @@ const uploadCsvData = async (req, res) => {
     if (masterOps.length > 0) await StudentMaster.bulkWrite(masterOps);
     if (academicOps.length > 0) await AcademicRecord.bulkWrite(academicOps);
 
-    res.status(200).json({ 
+    res.status(200).json({
       success: true,
       message: "CSV Processed and saved to R-19 Database",
       students: data.map((s) => ({
-        seat_no: s["Seat No"] || s["Seat_No"], name: s["Name"], prn: s["PRN"], result: s["Result"] || s["Final Result"], sgpi: s["SGPI"] || s["SGPA"],
-      }))
+        seat_no: s["Seat No"] || s["Seat_No"],
+        name: s["Name"],
+        prn: s["PRN"],
+        result: s["Result"] || s["Final Result"],
+        sgpi: s["SGPI"] || s["SGPA"],
+      })),
     });
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 };
-
 
 // --- DATA RETRIEVAL FOR ANALYSIS TABS ---
 const getStudents = async (req, res) => {
@@ -201,32 +280,36 @@ const getStudents = async (req, res) => {
     const { semester, isNEP } = req.query;
 
     if (semester) {
-      if (isNEP === 'true') {
-        const records = await NepAcademicRecord.find({ semester: Number(semester) });
-        const formatted = records.map(r => ({
+      if (isNEP === "true") {
+        const records = await NepAcademicRecord.find({
+          semester: Number(semester),
+        });
+        const formatted = records.map((r) => ({
           seatNo: r.seatNo,
           name: r.name,
           gender: r.gender,
           results: { sgpi: r.sgpi, finalResult: r.finalResult },
-          subjects: r.subjects || {}
+          subjects: r.subjects || {},
         }));
         return res.json(formatted);
       } else {
-        const records = await AcademicRecord.find({ semester: Number(semester) });
-        const prns = records.map(r => r.prn);
+        const records = await AcademicRecord.find({
+          semester: Number(semester),
+        });
+        const prns = records.map((r) => r.prn);
         const students = await StudentMaster.find({ prn: { $in: prns } });
-        
-        const studentMap = {};
-        students.forEach(s => studentMap[s.prn] = s);
 
-        const formatted = records.map(r => {
+        const studentMap = {};
+        students.forEach((s) => (studentMap[s.prn] = s));
+
+        const formatted = records.map((r) => {
           const studentDetails = studentMap[r.prn] || {};
           return {
             seatNo: r.seatNo,
             name: studentDetails.name || "Unknown",
             gender: studentDetails.gender || "Unknown",
             results: { sgpi: r.sgpi, finalResult: r.finalResult },
-            subjects: r.subjects || {}
+            subjects: r.subjects || {},
           };
         });
         return res.json(formatted);
@@ -249,22 +332,26 @@ const getStudentHistory = async (req, res) => {
     const r19Matches = await StudentMaster.find({
       $or: [
         { prn: new RegExp(`^${query}$`, "i") },
-        { name: new RegExp(query, "i") }
-      ]
+        { name: new RegExp(query, "i") },
+      ],
     }).lean();
 
     // 2. Search NEP Data
     const nepMatchesRaw = await NepAcademicRecord.find({
       $or: [
         { seatNo: new RegExp(`^${query}$`, "i") },
-        { name: new RegExp(query, "i") }
-      ]
+        { name: new RegExp(query, "i") },
+      ],
     }).lean();
 
     const uniqueNepStudents = {};
-    nepMatchesRaw.forEach(record => {
+    nepMatchesRaw.forEach((record) => {
       if (!uniqueNepStudents[record.seatNo]) {
-        uniqueNepStudents[record.seatNo] = { name: record.name, seatNo: record.seatNo, category: "NEP-2024" };
+        uniqueNepStudents[record.seatNo] = {
+          name: record.name,
+          seatNo: record.seatNo,
+          category: "NEP-2024",
+        };
       }
     });
     const nepMatches = Object.values(uniqueNepStudents);
@@ -272,88 +359,124 @@ const getStudentHistory = async (req, res) => {
     // 3. COMBINE & DEDUPLICATE
     const uniqueMatchesMap = new Map();
 
-    r19Matches.forEach(s => {
+    r19Matches.forEach((s) => {
       uniqueMatchesMap.set(s.prn, {
         name: s.name,
         prn: s.prn,
         category: s.status || "Regular",
-        batch: "R-19 Scheme"
+        batch: "R-19 Scheme",
       });
     });
 
-    nepMatches.forEach(s => {
+    nepMatches.forEach((s) => {
       if (uniqueMatchesMap.has(s.seatNo)) {
         const existing = uniqueMatchesMap.get(s.seatNo);
-        existing.batch = "NEP 2024 Scheme"; 
+        existing.batch = "NEP 2024 Scheme";
       } else {
         uniqueMatchesMap.set(s.seatNo, {
           name: s.name,
           prn: s.seatNo,
           category: "Regular",
-          batch: "NEP 2024 Scheme"
+          batch: "NEP 2024 Scheme",
         });
       }
     });
 
     const combinedList = Array.from(uniqueMatchesMap.values());
 
-    if (combinedList.length === 0) return res.status(404).json({ message: "No student found with that Name, PRN, or Seat No." });
+    if (combinedList.length === 0)
+      return res
+        .status(404)
+        .json({ message: "No student found with that Name, PRN, or Seat No." });
 
     if (combinedList.length > 1) {
-      return res.json({ type: "multiple", count: combinedList.length, students: combinedList });
+      return res.json({
+        type: "multiple",
+        count: combinedList.length,
+        students: combinedList,
+      });
     }
 
     const student = combinedList[0];
 
     const r19Records = await AcademicRecord.find({ prn: student.prn }).lean();
-    const nepRecords = await NepAcademicRecord.find({ seatNo: student.prn }).lean();
+    const nepRecords = await NepAcademicRecord.find({
+      seatNo: student.prn,
+    }).lean();
 
-    const allRecords = [...r19Records, ...nepRecords].sort((a, b) => a.semester - b.semester);
+    const allRecords = [...r19Records, ...nepRecords].sort(
+      (a, b) => a.semester - b.semester,
+    );
 
     const academicHistory = {};
-    
+
     // STRICT TRACKERS
     let eseFCount = 0;
     let otherFCount = 0;
-    let activeKtsCount = 0; 
+    let activeKtsCount = 0;
 
-    allRecords.forEach(record => {
+    allRecords.forEach((record) => {
       const semKey = `Semester ${record.semester}`;
       if (!academicHistory[semKey]) academicHistory[semKey] = [];
 
       let hasKT = false;
-      
+
       if (record.subjects) {
         Object.entries(record.subjects).forEach(([key, val]) => {
           const k = key.toLowerCase().trim();
-          
+
           // STRICT RULE: ONLY check keys that are explicitly 'Grade' columns
-          if (!k.includes('grade') && !k.endsWith('_gr')) return;
-          
+          if (!k.includes("grade") && !k.endsWith("_gr")) return;
+
           // Ignore Total grades just in case
-          if (k.includes('tot') || k.includes('result') || k.includes('status') || k.includes('sgp')) return;
-          
+          if (
+            k.includes("tot") ||
+            k.includes("result") ||
+            k.includes("status") ||
+            k.includes("sgp")
+          )
+            return;
+
           const valStr = String(val).trim().toUpperCase();
-          const isFail = valStr === 'F' || valStr === 'ABS' || valStr === 'KT' || 
-                         (valStr.includes('F') && valStr.length <= 6 && !valStr.includes('FEM'));
+          const isFail =
+            valStr === "F" ||
+            valStr === "ABS" ||
+            valStr === "KT" ||
+            (valStr.includes("F") &&
+              valStr.length <= 6 &&
+              !valStr.includes("FEM"));
 
           if (isFail) {
-              hasKT = true;
-              activeKtsCount++;
-              
-              if (k.includes('ese') || k.includes('th') || k.includes('theory')) {
-                  eseFCount++;
-              } else if (k.includes('ia') || k.includes('tw') || k.includes('pr') || k.includes('or') || k.includes('pract') || k.includes('term') || k.includes('internal')) {
-                  otherFCount++;
-              } else {
-                  eseFCount++; 
-              }
+            hasKT = true;
+            activeKtsCount++;
+
+            if (k.includes("ese") || k.includes("th") || k.includes("theory")) {
+              eseFCount++;
+            } else if (
+              k.includes("ia") ||
+              k.includes("tw") ||
+              k.includes("pr") ||
+              k.includes("or") ||
+              k.includes("pract") ||
+              k.includes("term") ||
+              k.includes("internal")
+            ) {
+              otherFCount++;
+            } else {
+              eseFCount++;
+            }
           }
         });
       }
-      
+
       const resUpper = String(record.finalResult).toUpperCase();
-      if (resUpper === "F" || resUpper === "FAILED" || resUpper === "KT" || resUpper.includes("FAIL")) hasKT = true;
+      if (
+        resUpper === "F" ||
+        resUpper === "FAILED" ||
+        resUpper === "KT" ||
+        resUpper.includes("FAIL")
+      )
+        hasKT = true;
 
       academicHistory[semKey].push({
         seatNo: record.seatNo,
@@ -361,30 +484,29 @@ const getStudentHistory = async (req, res) => {
         totalMarks: record.totalMarks || "0",
         result: record.finalResult || "N/A",
         hasKT: hasKT,
-        subjects: record.subjects || {}
+        subjects: record.subjects || {},
       });
     });
 
     const totalSystemFails = eseFCount + otherFCount;
 
     // --- STRICT DYNAMIC DROPPER LOGIC ---
-    let finalCategory = "Regular"; 
-    
+    let finalCategory = "Regular";
+
     if (student.batch === "R-19 Scheme" || !student.batch?.includes("NEP")) {
-        
-        // 1. If no active KTs, always Regular
-        if (activeKtsCount === 0) {
-            finalCategory = "Regular";
+      // 1. If no active KTs, always Regular
+      if (activeKtsCount === 0) {
+        finalCategory = "Regular";
+      } else {
+        // 2. Exact Dropper Rules
+        if (eseFCount >= 5) {
+          finalCategory = "Dropper";
+        } else if (totalSystemFails >= 10) {
+          finalCategory = "Dropper";
         } else {
-            // 2. Exact Dropper Rules
-            if (eseFCount >= 5) {
-                finalCategory = "Dropper";
-            } else if (totalSystemFails >= 10) {
-                finalCategory = "Dropper";
-            } else {
-                finalCategory = "Regular"; 
-            }
+          finalCategory = "Regular";
         }
+      }
     }
 
     res.json({
@@ -392,13 +514,15 @@ const getStudentHistory = async (req, res) => {
       profile: {
         name: student.name,
         prn: student.prn,
-        category: finalCategory, 
-        batch: student.batch
+        category: finalCategory,
+        batch: student.batch,
       },
-      summary: { totalSemestersAppeared: allRecords.length, ktCount: activeKtsCount },
-      academicHistory: academicHistory
+      summary: {
+        totalSemestersAppeared: allRecords.length,
+        ktCount: activeKtsCount,
+      },
+      academicHistory: academicHistory,
     });
-
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -406,10 +530,17 @@ const getStudentHistory = async (req, res) => {
 
 const getStudentsByBatch = async (req, res) => {
   try {
-    const students = await StudentMaster.find({ batch: new RegExp(req.params.batch, "i") });
-    if (students.length === 0) return res.status(404).json({ message: "No students found for this batch" });
+    const students = await StudentMaster.find({
+      batch: new RegExp(req.params.batch, "i"),
+    });
+    if (students.length === 0)
+      return res
+        .status(404)
+        .json({ message: "No students found for this batch" });
     res.status(200).json(students);
-  } catch (error) { res.status(500).json({ message: error.message }); }
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
 };
 
 const mergeStudents = async (req, res) => {
@@ -423,123 +554,374 @@ const mergeStudents = async (req, res) => {
     // 1. Move R-19 Academic Records Safely
     const sourceR19Records = await AcademicRecord.find({ prn: sourcePrn });
     for (const record of sourceR19Records) {
-        const existingTargetSem = await AcademicRecord.findOne({ 
-            prn: targetPrn, 
-            semester: record.semester 
-        });
-        
-        if (existingTargetSem) {
-            await AcademicRecord.deleteOne({ _id: record._id });
-        } else {
-            await AcademicRecord.updateOne({ _id: record._id }, { $set: { prn: targetPrn } });
-        }
+      const existingTargetSem = await AcademicRecord.findOne({
+        prn: targetPrn,
+        semester: record.semester,
+      });
+
+      if (existingTargetSem) {
+        await AcademicRecord.deleteOne({ _id: record._id });
+      } else {
+        await AcademicRecord.updateOne(
+          { _id: record._id },
+          { $set: { prn: targetPrn } },
+        );
+      }
     }
 
     // 2. Move NEP Academic Records Safely
-    const sourceNepRecords = await NepAcademicRecord.find({ seatNo: sourcePrn });
+    const sourceNepRecords = await NepAcademicRecord.find({
+      seatNo: sourcePrn,
+    });
     for (const record of sourceNepRecords) {
-        const existingTargetSem = await NepAcademicRecord.findOne({ 
-            seatNo: targetPrn, 
-            semester: record.semester 
-        });
-        
-        if (existingTargetSem) {
-            await NepAcademicRecord.deleteOne({ _id: record._id });
-        } else {
-            await NepAcademicRecord.updateOne({ _id: record._id }, { $set: { seatNo: targetPrn } });
-        }
+      const existingTargetSem = await NepAcademicRecord.findOne({
+        seatNo: targetPrn,
+        semester: record.semester,
+      });
+
+      if (existingTargetSem) {
+        await NepAcademicRecord.deleteOne({ _id: record._id });
+      } else {
+        await NepAcademicRecord.updateOne(
+          { _id: record._id },
+          { $set: { seatNo: targetPrn } },
+        );
+      }
     }
 
     // 3. Handle Master Profile Identity
     const existingTarget = await StudentMaster.findOne({ prn: targetPrn });
     if (existingTarget) {
-        await StudentMaster.deleteOne({ prn: sourcePrn });
+      await StudentMaster.deleteOne({ prn: sourcePrn });
     } else {
-        await StudentMaster.updateOne({ prn: sourcePrn }, { $set: { prn: targetPrn } });
+      await StudentMaster.updateOne(
+        { prn: sourcePrn },
+        { $set: { prn: targetPrn } },
+      );
     }
 
     res.json({ success: true, message: "Profiles merged successfully!" });
-  } catch (error) { 
+  } catch (error) {
     console.error("Merge error:", error);
-    res.status(500).json({ error: error.message || "Database Merge Error" }); 
+    res.status(500).json({ error: error.message || "Database Merge Error" });
   }
 };
-
-
 
 // --- R-19 ATKT SMART PROCESSOR ---
 const uploadAtktCsvData = async (req, res) => {
   try {
-    if (!req.file) return res.status(400).json({ message: "Upload a CSV file." });
+    if (!req.file)
+      return res.status(400).json({ message: "Upload a CSV file." });
     const csvString = req.file.buffer.toString();
-    const { data } = Papa.parse(csvString, { header: true, skipEmptyLines: true });
+    const { data } = Papa.parse(csvString, {
+      header: true,
+      skipEmptyLines: true,
+    });
 
     const semNum = Number(req.body.semester);
-    if (!semNum) return res.status(400).json({ message: "Semester number is required." });
+    if (!semNum)
+      return res.status(400).json({ message: "Semester number is required." });
 
     const academicOps = [];
 
     data.forEach((s) => {
-      const seatKey = Object.keys(s).find((k) => k.trim() === "Seat No" || k.trim() === "Seat_No");
-      const cleanSeatNo = (seatKey ? s[seatKey] : "").toString().replace(/[^0-9]/g, "");
+      const seatKey = Object.keys(s).find(
+        (k) => k.trim() === "Seat No" || k.trim() === "Seat_No",
+      );
+      const cleanSeatNo = (seatKey ? s[seatKey] : "")
+        .toString()
+        .replace(/[^0-9]/g, "");
       const rawPRN = (s["PRN"] || "").toString().replace(/[^0-9]/g, "");
-      
-      if (!rawPRN) return; 
+
+      if (!rawPRN) return;
 
       const extractedSGPI = s["SGPI"] || s["SGPA"] || "0";
       const extractedTotal = s["Grand_Total"] || s["Total Marks"] || "0";
       const extractedResult = s["Result"] || s["Final Result"] || "N/A";
 
       const flatSubjects = {};
-      const excludedKeys = ["seat no", "seat_no", "prn", "name", "gender", "result", "final result", "sgpi", "sgpa", "grand_total", "total marks", "remark"];
+      const excludedKeys = [
+        "seat no",
+        "seat_no",
+        "prn",
+        "name",
+        "gender",
+        "result",
+        "final result",
+        "sgpi",
+        "sgpa",
+        "grand_total",
+        "total marks",
+        "remark",
+      ];
       Object.keys(s).forEach((key) => {
-        if (!excludedKeys.includes(key.toLowerCase().trim())) flatSubjects[key] = s[key];
+        if (!excludedKeys.includes(key.toLowerCase().trim()))
+          flatSubjects[key] = s[key];
       });
 
       const updateFields = {
-        sgpi: extractedSGPI, 
+        sgpi: extractedSGPI,
         totalMarks: extractedTotal,
         finalResult: extractedResult,
-        seatNo: cleanSeatNo 
+        seatNo: cleanSeatNo,
       };
 
       Object.entries(flatSubjects).forEach(([key, val]) => {
-         if (val && val.toString().trim() !== "") {
-             updateFields[`subjects.${key}`] = val;
-         }
+        if (val && val.toString().trim() !== "") {
+          updateFields[`subjects.${key}`] = val;
+        }
       });
 
       academicOps.push({
         updateOne: {
           filter: { prn: rawPRN, semester: semNum },
           update: { $set: updateFields },
-          upsert: true 
+          upsert: true,
         },
       });
     });
 
     if (academicOps.length > 0) {
-        const dbResult = await AcademicRecord.bulkWrite(academicOps);
-        res.status(200).json({ 
-          success: true,
-          message: `ATKT Processed! Smart Updated ${dbResult.modifiedCount} records & Inserted ${dbResult.upsertedCount}.`,
-          students: data.map((s) => ({
-            seat_no: s["Seat No"] || s["Seat_No"], name: s["Name"], prn: s["PRN"], result: s["Result"] || s["Final Result"], sgpi: s["SGPI"] || s["SGPA"],
-          }))
-        });
+      const dbResult = await AcademicRecord.bulkWrite(academicOps);
+      res.status(200).json({
+        success: true,
+        message: `ATKT Processed! Smart Updated ${dbResult.modifiedCount} records & Inserted ${dbResult.upsertedCount}.`,
+        students: data.map((s) => ({
+          seat_no: s["Seat No"] || s["Seat_No"],
+          name: s["Name"],
+          prn: s["PRN"],
+          result: s["Result"] || s["Final Result"],
+          sgpi: s["SGPI"] || s["SGPA"],
+        })),
+      });
     } else {
-        res.status(400).json({ error: "No valid ATKT records with PRNs found." });
+      res.status(400).json({ error: "No valid ATKT records with PRNs found." });
     }
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 };
 
+// ==========================================
+// 1. SEMESTER 1 - Data Fetcher
+// ==========================================
+// ==========================================
+// SEMESTER 1 - Data Fetcher (Updated with MU Paper Codes)
+// ==========================================
+const getSem1Students = async (req, res) => {
+  try {
+    const records = await AcademicRecord.aggregate([
+      { $match: { semester: 1 } },
+      {
+        $lookup: {
+          from: "studentmasters", // Ensure this matches your collection name
+          localField: "prn",
+          foreignField: "prn",
+          as: "studentInfo",
+        },
+      },
+      { $unwind: { path: "$studentInfo", preserveNullAndEmptyArrays: true } },
+    ]);
 
-module.exports = { 
-    uploadCsvData, 
-    uploadNepPdfData,
-    uploadAtktCsvData, 
-    getStudents, 
-    getStudentHistory,
-    getStudentsByBatch,
-    mergeStudents
+    const formattedData = records.map((record) => {
+      const subjects = record.subjects || {};
+
+      // Smart Helper to find marks by Paper Code OR by Exact Name
+      const findMarks = (code, name) => {
+        // 1. Direct string match first (if you ever manually type the name in DB)
+        if (subjects[name] !== undefined) return subjects[name];
+
+        // 2. Loop through paper1code to paper15code to find the matching MU Code
+        for (let i = 1; i <= 15; i++) {
+          const pCode = subjects[`paper${i}code`];
+          // Replace '.0' in case the database saved 58651 as a float (58651.0)
+          if (pCode && pCode.toString().replace(".0", "") === code) {
+            return subjects[`paper${i}marks`];
+          }
+        }
+        return "-";
+      };
+
+      return {
+        "Seat No":
+          record.seatNo || record.studentInfo?.seatNo || record.prn || "N/A",
+        Name: record.studentInfo?.name || "Unknown",
+        Gender: record.studentInfo?.gender || "Unknown",
+        Result: record.finalResult || "N/A",
+        SGPI: record.sgpi || "0",
+
+        // Map Database MU Paper Codes to what Sem1Analysis.tsx expects
+        Eng_Maths_I_Marks: findMarks("58651", "Engineering Mathematics - I"),
+        Eng_Physics_I_Marks: findMarks("58652", "Engineering Physics - I"),
+        Eng_Chem_I_Marks: findMarks("58655", "Engineering Chemistry - I"),
+        Eng_Mechanics_Marks: findMarks("58653", "Engineering Mechanics"),
+        Basic_Elec_Eng_Marks: findMarks(
+          "58654",
+          "Basic Electrical Engineering",
+        ),
+
+        // Spread the raw subjects as a fallback
+        ...subjects,
+      };
+    });
+
+    res.status(200).json(formattedData);
+  } catch (error) {
+    console.error("Sem 1 Fetch Error:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ==========================================
+// SEMESTER 2 - Data Fetcher (with MU Paper Codes)
+// ==========================================
+const getSem2Students = async (req, res) => {
+  try {
+    const records = await AcademicRecord.aggregate([
+      { $match: { semester: 2 } },
+      {
+        $lookup: {
+          from: "studentmasters",
+          localField: "prn",
+          foreignField: "prn",
+          as: "studentInfo",
+        },
+      },
+      { $unwind: { path: "$studentInfo", preserveNullAndEmptyArrays: true } },
+    ]);
+
+    const formattedData = records.map((record) => {
+      const subjects = record.subjects || {};
+
+      // Smart Helper to find marks by Paper Code OR by Exact Name
+      const findMarks = (code, name) => {
+        if (subjects[name] !== undefined) return subjects[name];
+        for (let i = 1; i <= 15; i++) {
+          const pCode = subjects[`paper${i}code`];
+          if (pCode && pCode.toString().replace(".0", "") === code) {
+            return subjects[`paper${i}marks`];
+          }
+        }
+        return "-";
+      };
+
+      return {
+        "Seat No":
+          record.seatNo || record.studentInfo?.seatNo || record.prn || "N/A",
+        Name: record.studentInfo?.name || "Unknown",
+        Gender: record.studentInfo?.gender || "Unknown",
+        Result: record.finalResult || "N/A",
+        SGPI: record.sgpi || "0",
+
+        // Exact Keys Expected by Sem2Analysis.tsx Mapping
+        "Eng_Maths-II_Marks": findMarks(
+          "29711",
+          "Engineering Mathematics - II",
+        ),
+        "Eng_Physics-II_Marks": findMarks("29712", "Engineering Physics - II"),
+        "Eng_Chem-II_Marks": findMarks("29713", "Engineering Chemistry - II"),
+        Eng_Graphics_Marks: findMarks("29714", "Engineering Graphics"),
+        "C Prog_Marks": findMarks("29715", "C Programming"),
+
+        // Spread the raw subjects as a fallback
+        ...subjects,
+      };
+    });
+
+    res.status(200).json(formattedData);
+  } catch (error) {
+    console.error("Sem 2 Fetch Error:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ==========================================
+// SEMESTER 7 - Data Fetcher (Dynamic Map)
+// ==========================================
+const sem7Map = {
+  "AI and Data Science - II": "AI_DS_II_Marks",
+  "Internet of Everything": "IoE_Marks",
+  "Data Science Lab": "Data_Science_Lab_Marks",
+  "IOE Lab": "IOE_Lab_Marks",
+  "Secure App Dev Lab": "Secure_App_Dev_Lab_Marks",
+  "Open Source Project Lab": "Open_Source_Lab_Marks",
+  "Major Project - I": "Major_Project_I_Marks",
+};
+
+const getSem7Students = async (req, res) => {
+  try {
+    const records = await AcademicRecord.aggregate([
+      { $match: { semester: 7 } },
+      {
+        $lookup: {
+          from: "studentmasters",
+          localField: "prn",
+          foreignField: "prn",
+          as: "studentInfo",
+        },
+      },
+      { $unwind: { path: "$studentInfo", preserveNullAndEmptyArrays: true } },
+    ]);
+
+    const formattedData = records.map((record) => {
+      const subjects = record.subjects || {};
+      let mappedSubjects = {};
+
+      // 1. Loop through named subjects in DB and convert to Frontend format
+      for (const [dbKey, marks] of Object.entries(subjects)) {
+        if (sem7Map[dbKey]) {
+          mappedSubjects[sem7Map[dbKey]] = marks;
+        } else {
+          // Ignore raw paperCodes logic so we don't duplicate names
+          if (
+            !dbKey.includes("code") &&
+            !dbKey.includes("marks") &&
+            !dbKey.includes("cr")
+          ) {
+            const fallbackKey = dbKey.replace(/\s+/g, "_") + "_Marks";
+            mappedSubjects[fallbackKey] = marks;
+          }
+        }
+      }
+
+      // 2. Loop through paperCodes specifically (just in case they were uploaded via CSV format)
+      for (let i = 1; i <= 15; i++) {
+        const pCode = subjects[`paper${i}code`];
+        const pMarks = subjects[`paper${i}marks`];
+        if (pCode && pMarks) {
+          mappedSubjects[
+            `SubjectCode_${pCode.toString().replace(".0", "")}_Marks`
+          ] = pMarks;
+        }
+      }
+
+      return {
+        "Seat No":
+          record.seatNo || record.studentInfo?.seatNo || record.prn || "N/A",
+        Name: record.studentInfo?.name || "Unknown",
+        Gender: record.studentInfo?.gender || "Unknown",
+        Result: record.finalResult || "N/A",
+        SGPI: record.sgpi || "0",
+        ...mappedSubjects,
+        ...subjects,
+      };
+    });
+
+    res.status(200).json(formattedData);
+  } catch (error) {
+    console.error("Sem 7 Fetch Error:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+module.exports = {
+  uploadCsvData,
+  uploadNepPdfData,
+  uploadAtktCsvData,
+  getStudents,
+  getStudentHistory,
+  getStudentsByBatch,
+  mergeStudents,
+  getSem7Students,
+  getSem2Students,
+  getSem1Students,
 };

@@ -10,6 +10,9 @@ const {
   getStudentHistory,
   getStudentsByBatch,
   mergeStudents,
+  getSem1Students,
+  getSem2Students,
+  getSem7Students,
 } = require("../controllers/studentController");
 
 const { getStudentMLInsights } = require("../controllers/mlController");
@@ -26,6 +29,9 @@ router.post("/:prn/ml-insights", getStudentMLInsights);
 // Utility Routes
 router.post("/merge", mergeStudents);
 router.get("/", getStudents);
+router.get("/sem1", getSem1Students);
+router.get("/sem2", getSem2Students);
+router.get("/sem7", getSem7Students);
 router.get("/history/:prn", getStudentHistory);
 router.get("/batch/:batch", getStudentsByBatch);
 router.get("/analytics/batch", getBatchAnalytics);

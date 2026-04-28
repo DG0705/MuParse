@@ -241,7 +241,7 @@ export const AnalyticsDashboard = () => {
                                 <Tooltip />
                             </PieChart>
                         </ResponsiveContainer>
-                        <div className="flex justify-center gap-4 text-sm mt-4">
+                        <div className="flex justify-center gap-4 text-sm">
                             <span className="flex items-center gap-1"><div className="w-3 h-3 bg-emerald-500 rounded-full"></div> Consistent</span>
                             <span className="flex items-center gap-1"><div className="w-3 h-3 bg-amber-500 rounded-full"></div> Mid-Tier</span>
                             <span className="flex items-center gap-1"><div className="w-3 h-3 bg-red-500 rounded-full"></div> At Risk</span>

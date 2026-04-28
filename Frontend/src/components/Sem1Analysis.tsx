@@ -2,8 +2,7 @@ import React, { useState, useMemo, useRef, useEffect } from "react";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import SubjectAnalysisReport from "./SubjectAnalysisReport";
-import { Button } from "@/components/ui/button"; 
-import { useToast } from "@/hooks/use-toast"; 
+import { useToast } from "@/hooks/use-toast";
 
 // --- Interfaces ---
 export interface StudentData {
@@ -17,7 +16,7 @@ export interface StudentData {
   Eng_Chem_I_Marks: string;
   Eng_Mechanics_Marks: string;
   Basic_Elec_Eng_Marks: string;
-  [key: string]: string;
+  [key: string]: any;
 }
 
 export interface TopperEntry {
@@ -64,11 +63,11 @@ const subjectMapping: { [key: string]: string } = {
 const subjectKeys = Object.keys(subjectMapping);
 
 const teacherAssignment: { [key: string]: string } = {
-  "Eng. Maths I": "Prof. A. N. Sharma",
-  "Eng. Physics I": "Dr. R. K. Singh",
-  "Eng. Chem I": "Prof. S. B. Patil",
-  Mechanics: "Dr. A. A. Khan",
-  "Basic Elec. Eng.": "Prof. J. M. Desai",
+  "Eng. Maths I": "XYX",
+  "Eng. Physics I": "XYZ",
+  "Eng. Chem I": "XYZ",
+  Mechanics: "XYZ",
+  "Basic Elec. Eng.": "XYZ",
 };
 
 // --- PDF/PNG Download Logic ---
@@ -301,27 +300,19 @@ const Sem1Analysis: React.FC = () => {
     const fetchStudents = async () => {
       try {
         setLoading(true);
-        // Fetch combined data from our fixed backend logic
-        const res = await fetch("http://localhost:5000/api/students?semester=1");
+        const res = await fetch("http://localhost:5000/api/students/sem1");
         if (!res.ok) throw new Error("Failed to fetch data from server");
 
         const json = await res.json();
-
-        // Transform Backend Data (Nested) to Frontend Format (Flat)
-        const mappedData: StudentData[] = json.map((s: any) => ({
-          ...s.subjects, // All raw subjects
-          "Seat No": s.seatNo,
-          Name: s.name,
-          Result: s.results?.finalResult || s.finalResult || "N/A",
-          SGPI: s.results?.sgpi || s.sgpi || "0",
-          Gender: s.gender || s.subjects?.Gender || "Unknown",
-        }));
-
-        setParsedData(mappedData);
+        setParsedData(json);
       } catch (err: any) {
         console.error(err);
-        setError("Could not load data. Ensure the backend is running and data is uploaded.");
-        toast({ title: "Fetch Error", description: err.message, variant: "destructive" });
+        setError("Could not load data. Ensure the backend is running.");
+        toast({
+          title: "Fetch Error",
+          description: err.message,
+          variant: "destructive",
+        });
       } finally {
         setLoading(false);
       }
@@ -347,62 +338,80 @@ const Sem1Analysis: React.FC = () => {
       } as SummaryData;
     }
 
+    const totalStudents = parsedData.length;
+
     const malePassed = parsedData.filter(
-      (s) => s.Gender === "Male" && s.Result === "Successful",
+      (s) =>
+        s.Gender === "Male" && (s.Result === "Successful" || s.Result === "P"),
     ).length;
+
     const maleFailed = parsedData.filter(
       (s) =>
-        s.Gender === "Male" &&
-        (s.Result === "Unsuccessful" || s.Result === "ABS"),
+        s.Gender === "Male" && s.Result !== "Successful" && s.Result !== "P",
     ).length;
+
     const femalePassed = parsedData.filter(
-      (s) => s.Gender === "Female" && s.Result === "Successful",
-    ).length;
-    const femaleFailed = parsedData.filter(
       (s) =>
         s.Gender === "Female" &&
-        (s.Result === "Unsuccessful" || s.Result === "ABS"),
+        (s.Result === "Successful" || s.Result === "P"),
     ).length;
-    const totalStudents = parsedData.length;
+
+    const femaleFailed = parsedData.filter(
+      (s) =>
+        s.Gender === "Female" && s.Result !== "Successful" && s.Result !== "P",
+    ).length;
+
     const successful = malePassed + femalePassed;
     const passPercentageOverall =
       totalStudents > 0 ? (successful / totalStudents) * 100 : 0;
 
     const overallToppers = parsedData
-      .filter(
-        (s) =>
-          s.Result === "Successful" && s.SGPI && !isNaN(parseFloat(s.SGPI)),
-      )
-      .sort((a, b) => parseFloat(b.SGPI) - parseFloat(a.SGPI))
+      .filter((s) => (s.Result === "Successful" || s.Result === "P") && s.SGPI)
+      .sort((a, b) => Number(b.SGPI) - Number(a.SGPI))
       .slice(0, 3);
 
     const subjectAnalysis: AnalysisData = {};
+
+    // Helper to safely convert incoming strings like "80" or "80.00" to Numbers
+    const getNum = (val: any) => {
+      if (!val || val === "-") return NaN;
+      return Number(val);
+    };
+
     subjectKeys.forEach((markKey) => {
       const subjectName = subjectMapping[markKey];
+
       const studentsWithMarks = parsedData.filter(
-        (student) => student[markKey] && !isNaN(parseInt(student[markKey])),
+        (student) => !isNaN(getNum(student[markKey])),
       );
+
       const totalAppeared = studentsWithMarks.length;
+
       const passMark =
         subjectName === "Eng. Physics I" || subjectName === "Eng. Chem I"
           ? 30
           : 40;
+
       const marks40_50 = studentsWithMarks.filter((s) => {
-        const marks = parseInt(s[markKey]);
+        const marks = getNum(s[markKey]);
         return marks >= 40 && marks <= 50;
       }).length;
+
       const marks51_59 = studentsWithMarks.filter((s) => {
-        const marks = parseInt(s[markKey]);
+        const marks = getNum(s[markKey]);
         return marks >= 51 && marks <= 59;
       }).length;
+
       const marks60_Above = studentsWithMarks.filter((s) => {
-        const marks = parseInt(s[markKey]);
+        const marks = getNum(s[markKey]);
         return marks >= 60;
       }).length;
+
       const totalPassed = studentsWithMarks.filter((s) => {
-        const marks = parseInt(s[markKey]);
+        const marks = getNum(s[markKey]);
         return marks >= passMark;
       }).length;
+
       const passPercentage =
         totalAppeared > 0
           ? ((totalPassed / totalAppeared) * 100).toFixed(2) + "%"
@@ -420,53 +429,26 @@ const Sem1Analysis: React.FC = () => {
     });
 
     const subjectToppers: { [key: string]: TopperEntry[] } = {};
+
     subjectKeys.forEach((markKey) => {
       const sortedStudents = parsedData
-        .filter(
-          (student) => student[markKey] && !isNaN(parseInt(student[markKey])),
-        )
-        .sort((a, b) => parseInt(b[markKey]) - parseInt(a[markKey]));
+        .filter((student) => !isNaN(getNum(student[markKey])))
+        .sort((a, b) => getNum(b[markKey]) - getNum(a[markKey]));
 
       let toppersList: TopperEntry[] = [];
       let uniqueMarks = new Set<number>();
 
       for (const student of sortedStudents) {
-        const currentMark = parseInt(student[markKey]);
+        const currentMark = getNum(student[markKey]);
         if (uniqueMarks.size < 2 || uniqueMarks.has(currentMark)) {
-          if (
-            toppersList.length === 0 ||
-            currentMark === toppersList[0].marks
-          ) {
-            toppersList.push({
-              name: student.Name,
-              marks: currentMark,
-              seatNo: student["Seat No"],
-            });
-            uniqueMarks.add(currentMark);
-          } else if (uniqueMarks.size === 1) {
-            toppersList.push({
-              name: student.Name,
-              marks: currentMark,
-              seatNo: student["Seat No"],
-            });
-            uniqueMarks.add(currentMark);
-          } else if (
-            uniqueMarks.size === 2 &&
-            currentMark === toppersList[toppersList.length - 1].marks
-          ) {
-            toppersList.push({
-              name: student.Name,
-              marks: currentMark,
-              seatNo: student["Seat No"],
-            });
-            uniqueMarks.add(currentMark);
-          }
+          toppersList.push({
+            name: student.Name,
+            marks: currentMark,
+            seatNo: student["Seat No"],
+          });
+          uniqueMarks.add(currentMark);
         }
-        if (
-          uniqueMarks.size === 2 &&
-          currentMark < toppersList[toppersList.length - 1].marks
-        )
-          break;
+        if (uniqueMarks.size >= 2 && !uniqueMarks.has(currentMark)) break;
       }
       subjectToppers[subjectMapping[markKey]] = toppersList;
     });
@@ -498,17 +480,22 @@ const Sem1Analysis: React.FC = () => {
             Loading data from database...
           </p>
         )}
-        {error && <p className="text-red-600 font-bold">❌ {error}</p>}
+
+        {error && (
+          <div className="bg-red-50 border border-red-300 p-4 rounded text-red-800 mx-auto max-w-3xl mt-4">
+            <p className="font-bold text-lg mb-2">⚠️ Error</p>
+            <p>{error}</p>
+          </div>
+        )}
+
         {!loading && parsedData.length === 0 && !error && (
           <div className="bg-yellow-50 border border-yellow-200 p-4 rounded text-yellow-800">
             <p>No records found in the database.</p>
-            <p className="text-sm mt-1">
-              Go to the "Upload PDF" page to add student data first.
-            </p>
           </div>
         )}
+
         {!loading && parsedData.length > 0 && (
-          <p className="text-green-700 font-medium">
+          <p className="text-green-700 font-medium mt-2">
             Successfully loaded {parsedData.length} records.
           </p>
         )}
@@ -730,7 +717,7 @@ const Sem1Analysis: React.FC = () => {
                                     {student.name}
                                   </td>
                                   <td className="p-1 border border-gray-300">
-                                    {student.marks.toString()}
+                                    {student.marks}
                                   </td>
                                 </tr>
                               );

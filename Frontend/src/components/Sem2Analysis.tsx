@@ -1,20 +1,22 @@
-import React, { useState, useMemo, useRef } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import SubjectAnalysisReport from "./SubjectAnalysisReport";
+import { useToast } from "@/hooks/use-toast";
 
+// --- Interfaces ---
 export interface StudentData {
   "Seat No": string;
   Name: string;
   Gender: string;
   Result: string;
   SGPI: string;
-  "Eng. Maths-II_Marks": string;
-  "Eng. Physics-II_Marks": string;
-  "Eng. Chem-II_Marks": string;
-  "Eng. Graphics_Marks": string;
+  "Eng_Maths-II_Marks": string;
+  "Eng_Physics-II_Marks": string;
+  "Eng_Chem-II_Marks": string;
+  Eng_Graphics_Marks: string;
   "C Prog_Marks": string;
-  [key: string]: string;
+  [key: string]: any;
 }
 
 export interface TopperEntry {
@@ -50,66 +52,25 @@ export interface SummaryData {
   subjectAnalysis: AnalysisData;
 }
 
+// --- Constants ---
 const subjectMapping: { [key: string]: string } = {
   "Eng_Maths-II_Marks": "Eng. Maths II",
   "Eng_Physics-II_Marks": "Eng. Physics II",
   "Eng_Chem-II_Marks": "Eng. Chem II",
-  "Eng_Graphics_Marks": "Eng. Graphics",
+  Eng_Graphics_Marks: "Eng. Graphics",
   "C Prog_Marks": "C Programming",
 };
 const subjectKeys = Object.keys(subjectMapping);
 
 const teacherAssignment: { [key: string]: string } = {
-  "Eng_Maths II": "Prof. P. K. Iyer",
-  "Eng_Physics II": "Dr. S. M. Joshi",
-  "Eng_Chem II": "Prof. N. R. Reddy",
-  "Eng_Graphics": "Dr. V. S. Mehta",
-  "C Programming": "Prof. R. G. Gupta",
+  "Eng. Maths II": "XYZ",
+  "Eng. Physics II": "XYZ",
+  "Eng. Chem II": "XYZ",
+  "Eng. Graphics": "XYZ",
+  "C Programming": "XYZ",
 };
 
-const parseCSV = (csvText: string): StudentData[] => {
-  const lines = csvText.trim().split("\n");
-  if (lines.length < 2)
-    throw new Error(
-      "CSV file must contain a header and at least one row of data.",
-    );
-  const headers = lines[0].split(",").map((h) => h.replace(/"/g, "").trim());
-
-  const data: StudentData[] = lines
-    .slice(1)
-    .map((line) => {
-      const values = line.split(",");
-      const row: any = {};
-
-      if (values.length !== headers.length) {
-        console.error(
-          "Row data length mismatch with header length. Skipping row.",
-        );
-        return null;
-      }
-
-      headers.forEach((header, index) => {
-        const key = header;
-        let value = values[index];
-
-        if (value) {
-          if (value.startsWith('="') && value.endsWith('"')) {
-            value = value.substring(2, value.length - 1);
-          }
-          value = value.replace(/"/g, "").trim();
-        } else {
-          value = "";
-        }
-        row[key] = value;
-      });
-
-      return row as StudentData;
-    })
-    .filter((row): row is StudentData => row !== null);
-
-  return data;
-};
-
+// --- PDF/PNG Download Logic ---
 const getReportHeader = (title: string) => {
   return `
         <div style="text-align: center; margin-bottom: 20px; font-family: 'Times New Roman', serif; padding: 10px;">
@@ -138,14 +99,10 @@ const useDownloadReport = (
     fullHtml.style.padding = "20px";
     fullHtml.style.backgroundColor = "white";
     fullHtml.style.width = "794px";
-
-    // Add report header
     fullHtml.innerHTML = getReportHeader(title);
 
-    // Clone table/content and apply explicit styles
     const cloned = content.cloneNode(true) as HTMLElement;
 
-    // Fix thead
     cloned.querySelectorAll("thead").forEach((thead) => {
       const newHead = document.createElement("thead");
       thead.querySelectorAll("tr").forEach((row) => {
@@ -153,12 +110,10 @@ const useDownloadReport = (
         row.querySelectorAll("th, td").forEach((cell) => {
           const th = document.createElement("th");
           th.innerText = cell.textContent || "";
-          if (cell.hasAttribute("rowspan")) {
+          if (cell.hasAttribute("rowspan"))
             th.setAttribute("rowspan", cell.getAttribute("rowspan")!);
-          }
-          if (cell.hasAttribute("colspan")) {
+          if (cell.hasAttribute("colspan"))
             th.setAttribute("colspan", cell.getAttribute("colspan")!);
-          }
           th.style.border = "1px solid black";
           th.style.padding = "4px 8px";
           th.style.backgroundColor = "#f0f4ff";
@@ -172,7 +127,6 @@ const useDownloadReport = (
       thead.replaceWith(newHead);
     });
 
-    // Apply explicit borders to all TBODY cells and fix table styling
     cloned.querySelectorAll("tbody td").forEach((cell) => {
       (cell as HTMLElement).style.border = "1px solid black";
       (cell as HTMLElement).style.padding = "4px 8px";
@@ -187,7 +141,6 @@ const useDownloadReport = (
     fullHtml.appendChild(cloned);
     return fullHtml;
   };
-  // ----------------------------------------------------------------------
 
   const html2canvasOptions = {
     scale: 2.5,
@@ -201,91 +154,76 @@ const useDownloadReport = (
   const downloadPdf = async () => {
     const summaryContent = overallSummaryRef.current;
     const analysisContent = subjectAnalysisRef.current;
-
     if (!summaryContent || !analysisContent) return;
 
     setIsDownloading(true);
-    let analysisHtml: HTMLElement | null = null;
+    const tempElements: HTMLElement[] = [];
 
     try {
       await new Promise((resolve) => setTimeout(resolve, 50));
-
-      // 🛑 PDF HEIGHT FIX: Custom page size (A4 width, 1.2m height)
       const A4_WIDTH_MM = 210;
-      const CUSTOM_TALL_HEIGHT_MM = 800; // Reverted to 1.2 meters for safety
-
-      const pdf = new jsPDF(
-        "p", // Portrait orientation
-        "mm", // Millimeter unit
-        [A4_WIDTH_MM, CUSTOM_TALL_HEIGHT_MM], // Custom [width, height] in mm
-      );
-
+      const CUSTOM_TALL_HEIGHT_MM = 800;
+      const pdf = new jsPDF("p", "mm", [A4_WIDTH_MM, CUSTOM_TALL_HEIGHT_MM]);
       const pdfWidth = pdf.internal.pageSize.getWidth();
+      let currentYPosition = 0;
 
-      // --- 1. Combined HTML Content Generation ---
-      const combinedContent = document.createElement("div");
-      combinedContent.style.width = "794px";
-      combinedContent.style.padding = "20px";
-      combinedContent.style.backgroundColor = "white";
-
-      // Append Analysis Report content
-      const analysisContentNode = getFullHtmlContent(
+      const analysisHtml = getFullHtmlContent(
         subjectAnalysisRef,
         "RESULT ANALYSIS B.E. SEM II (Subjectwise Report)",
       );
-      if (analysisContentNode) {
-        analysisContentNode.childNodes.forEach((node) =>
-          combinedContent.appendChild(node.cloneNode(true)),
+      if (analysisHtml) {
+        document.body.appendChild(analysisHtml);
+        tempElements.push(analysisHtml);
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        const analysisCanvas = await html2canvas(
+          analysisHtml,
+          html2canvasOptions,
         );
+        const imgHeight =
+          (analysisCanvas.height * pdfWidth) / analysisCanvas.width;
+        pdf.addImage(
+          analysisCanvas.toDataURL("image/jpeg", 1.0),
+          "JPEG",
+          0,
+          currentYPosition,
+          pdfWidth,
+          imgHeight,
+        );
+        currentYPosition += imgHeight + 10;
       }
 
-      // Add Separator
-      const separator = document.createElement("div");
-      separator.style.cssText =
-        "height: 20px; border-top: 2px solid #333; margin: 20px 0;";
-      combinedContent.appendChild(separator);
-
-      // Append Summary Report content
-      const summaryContentNode = getFullHtmlContent(
+      const summaryHtml = getFullHtmlContent(
         overallSummaryRef,
         "RESULT ANALYSIS B.E. SEM II (Summary & Toppers)",
       );
-      if (summaryContentNode) {
-        summaryContentNode.childNodes.forEach((node) =>
-          combinedContent.appendChild(node.cloneNode(true)),
+      if (summaryHtml) {
+        document.body.appendChild(summaryHtml);
+        tempElements.push(summaryHtml);
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        const summaryCanvas = await html2canvas(
+          summaryHtml,
+          html2canvasOptions,
+        );
+        const imgHeight =
+          (summaryCanvas.height * pdfWidth) / summaryCanvas.width;
+        pdf.addImage(
+          summaryCanvas.toDataURL("image/jpeg", 1.0),
+          "JPEG",
+          0,
+          currentYPosition,
+          pdfWidth,
+          imgHeight,
         );
       }
 
-      analysisHtml = combinedContent;
-
-      // CRITICAL: Attach to DOM for accurate rendering
-      document.body.appendChild(analysisHtml);
-      await new Promise((resolve) => setTimeout(resolve, 100)); // Increased wait time
-
-      const analysisCanvas = await html2canvas(
-        analysisHtml,
-        html2canvasOptions,
-      );
-
-      const analysisImgData = analysisCanvas.toDataURL("image/jpeg", 1.0);
-
-      // Calculate height of the image to fit the custom PDF width
-      const imgHeight =
-        (analysisCanvas.height * pdfWidth) / analysisCanvas.width;
-
-      // Add the entire captured image to the first page (it's tall enough!)
-      pdf.addImage(analysisImgData, "JPEG", 0, 0, pdfWidth, imgHeight);
-
-      // Save the single, tall PDF page
-      pdf.save("Result_Analysis_Combined_Tall_Report_SEM2.pdf");
+      pdf.save("Result_Analysis_Combined_Tall_Report_Sem2.pdf");
     } catch (error) {
       console.error("Critical error during PDF generation:", error);
       alert("PDF Generation Failed! Please try downloading as PNG.");
     } finally {
-      // Cleanup: Remove temporary element from DOM
-      if (analysisHtml && document.body.contains(analysisHtml)) {
-        document.body.removeChild(analysisHtml);
-      }
+      tempElements.forEach(
+        (el) => document.body.contains(el) && document.body.removeChild(el),
+      );
       setIsDownloading(false);
     }
   };
@@ -293,17 +231,13 @@ const useDownloadReport = (
   const downloadPng = async () => {
     const summaryContent = overallSummaryRef.current;
     const analysisContent = subjectAnalysisRef.current;
-
     if (!summaryContent || !analysisContent) return;
     setIsDownloading(true);
-
     let combinedContainer: HTMLElement | null = null;
-
     try {
       combinedContainer = document.createElement("div");
       combinedContainer.style.width = "794px";
       combinedContainer.style.backgroundColor = "white";
-
       const page1Html = getFullHtmlContent(
         subjectAnalysisRef,
         "RESULT ANALYSIS B.E. SEM II (Subjectwise Report)",
@@ -312,12 +246,10 @@ const useDownloadReport = (
         page1Html.childNodes.forEach((node) =>
           combinedContainer?.appendChild(node.cloneNode(true)),
         );
-
       const separator = document.createElement("div");
       separator.style.cssText =
         "height: 20px; border-top: 1px dashed #ccc; margin: 20px 0;";
       combinedContainer.appendChild(separator);
-
       const page2Html = getFullHtmlContent(
         overallSummaryRef,
         "RESULT ANALYSIS B.E. SEM II (Summary & Toppers)",
@@ -326,15 +258,12 @@ const useDownloadReport = (
         page2Html.childNodes.forEach((node) =>
           combinedContainer?.appendChild(node.cloneNode(true)),
         );
-
       document.body.appendChild(combinedContainer);
       await new Promise((resolve) => setTimeout(resolve, 50));
-
       const canvas = await html2canvas(combinedContainer, html2canvasOptions);
-
       const link = document.createElement("a");
       link.href = canvas.toDataURL(`image/png`, 1.0);
-      link.download = "Result_Analysis_Combined_SEM2.png";
+      link.download = "Result_Analysis_Combined_Sem2.png";
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -342,9 +271,8 @@ const useDownloadReport = (
       console.error(`Error during PNG generation:`, error);
       alert(`Failed to generate PNG. Check console for details.`);
     } finally {
-      if (combinedContainer && document.body.contains(combinedContainer)) {
+      if (combinedContainer && document.body.contains(combinedContainer))
         document.body.removeChild(combinedContainer);
-      }
       setIsDownloading(false);
     }
   };
@@ -352,10 +280,12 @@ const useDownloadReport = (
   return { downloadPdf, downloadPng, isDownloading };
 };
 
+// --- Main Component ---
 const Sem2Analysis: React.FC = () => {
   const [parsedData, setParsedData] = useState<StudentData[]>([]);
-  const [fileName, setFileName] = useState<string | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const { toast } = useToast();
 
   const subjectAnalysisRef = useRef<HTMLDivElement>(null);
   const overallSummaryRef = useRef<HTMLDivElement>(null);
@@ -365,37 +295,39 @@ const Sem2Analysis: React.FC = () => {
     subjectAnalysisRef,
   );
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      setFileName(file.name);
-      setError(null);
-      setParsedData([]);
+  // --- Fetch Data from Backend ---
+  useEffect(() => {
+    const fetchStudents = async () => {
+      try {
+        setLoading(true);
+        const res = await fetch("http://localhost:5000/api/students/sem2");
+        if (!res.ok) throw new Error("Failed to fetch data from server");
 
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const rawText = e.target?.result as string;
-        try {
-          const data = parseCSV(rawText);
-          console.log("Parsed Data:", data); // Debugging line
-          setParsedData(data);
-        } catch (err) {
-          setError(
-            "Failed to parse the CSV file. Please ensure it's the correct format.",
-          );
-          setParsedData([]);
-        }
-      };
-      reader.readAsText(file);
-    }
-  };
+        const json = await res.json();
+        setParsedData(json);
+      } catch (err: any) {
+        console.error(err);
+        setError("Could not load data. Ensure the backend is running.");
+        toast({
+          title: "Fetch Error",
+          description: err.message,
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
 
+    fetchStudents();
+  }, [toast]);
+
+  // --- Calculation Logic ---
   const summary: SummaryData = useMemo(() => {
     if (parsedData.length === 0) {
       return {
         totalStudents: 0,
         successful: 0,
-        passPercentage: "0.00",
+        passPercentage: "0.00%",
         overallToppers: [],
         subjectToppers: {},
         malePassed: 0,
@@ -406,64 +338,77 @@ const Sem2Analysis: React.FC = () => {
       } as SummaryData;
     }
 
+    const totalStudents = parsedData.length;
+
     const malePassed = parsedData.filter(
-      (s) => s.Gender === "Male" && s.Result === "Successful",
+      (s) =>
+        s.Gender === "Male" && (s.Result === "Successful" || s.Result === "P"),
     ).length;
+
     const maleFailed = parsedData.filter(
       (s) =>
-        s.Gender === "Male" &&
-        (s.Result === "Unsuccessful" || s.Result === "ABS"),
+        s.Gender === "Male" && s.Result !== "Successful" && s.Result !== "P",
     ).length;
+
     const femalePassed = parsedData.filter(
-      (s) => s.Gender === "Female" && s.Result === "Successful",
-    ).length;
-    const femaleFailed = parsedData.filter(
       (s) =>
         s.Gender === "Female" &&
-        (s.Result === "Unsuccessful" || s.Result === "ABS"),
+        (s.Result === "Successful" || s.Result === "P"),
     ).length;
-    const totalStudents = parsedData.length;
+
+    const femaleFailed = parsedData.filter(
+      (s) =>
+        s.Gender === "Female" && s.Result !== "Successful" && s.Result !== "P",
+    ).length;
+
     const successful = malePassed + femalePassed;
     const passPercentageOverall =
       totalStudents > 0 ? (successful / totalStudents) * 100 : 0;
 
     const overallToppers = parsedData
-      .filter(
-        (s) =>
-          s.Result === "Successful" && s.SGPI && !isNaN(parseFloat(s.SGPI)),
-      )
-      .sort((a, b) => parseFloat(b.SGPI) - parseFloat(a.SGPI))
+      .filter((s) => (s.Result === "Successful" || s.Result === "P") && s.SGPI)
+      .sort((a, b) => Number(b.SGPI) - Number(a.SGPI))
       .slice(0, 3);
 
     const subjectAnalysis: AnalysisData = {};
+
+    // Helper to safely convert incoming strings like "80" or "80.00" to Numbers
+    const getNum = (val: any) => {
+      if (!val || val === "-") return NaN;
+      return Number(val);
+    };
+
     subjectKeys.forEach((markKey) => {
       const subjectName = subjectMapping[markKey];
+
       const studentsWithMarks = parsedData.filter(
-        (student) => student[markKey] && !isNaN(parseInt(student[markKey])),
+        (student) => !isNaN(getNum(student[markKey])),
       );
+
       const totalAppeared = studentsWithMarks.length;
 
-      // Passing marks based on subject names for Sem II
       const passMark =
         subjectName === "Eng. Physics II" || subjectName === "Eng. Chem II"
           ? 30
           : 40;
 
       const marks40_50 = studentsWithMarks.filter((s) => {
-        const marks = parseInt(s[markKey]);
+        const marks = getNum(s[markKey]);
         return marks >= 40 && marks <= 50;
       }).length;
+
       const marks51_59 = studentsWithMarks.filter((s) => {
-        const marks = parseInt(s[markKey]);
+        const marks = getNum(s[markKey]);
         return marks >= 51 && marks <= 59;
       }).length;
+
       const marks60_Above = studentsWithMarks.filter((s) => {
-        const marks = parseInt(s[markKey]);
+        const marks = getNum(s[markKey]);
         return marks >= 60;
       }).length;
 
       const totalPassed = studentsWithMarks.filter((s) => {
-        const marks = parseInt(s[markKey]);
+        const marks = getNum(s[markKey]);
         return marks >= passMark;
       }).length;
 
@@ -483,22 +428,18 @@ const Sem2Analysis: React.FC = () => {
       };
     });
 
-    // FIX: Logic to capture top two scores (including ties)
     const subjectToppers: { [key: string]: TopperEntry[] } = {};
+
     subjectKeys.forEach((markKey) => {
       const sortedStudents = parsedData
-        .filter(
-          (student) => student[markKey] && !isNaN(parseInt(student[markKey])),
-        )
-        .sort((a, b) => parseInt(b[markKey]) - parseInt(a[markKey]));
+        .filter((student) => !isNaN(getNum(student[markKey])))
+        .sort((a, b) => getNum(b[markKey]) - getNum(a[markKey]));
 
       let toppersList: TopperEntry[] = [];
       let uniqueMarks = new Set<number>();
 
       for (const student of sortedStudents) {
-        const currentMark = parseInt(student[markKey]);
-
-        // If we have less than 2 unique scores, or the current score matches one of the top two
+        const currentMark = getNum(student[markKey]);
         if (uniqueMarks.size < 2 || uniqueMarks.has(currentMark)) {
           toppersList.push({
             name: student.Name,
@@ -507,14 +448,7 @@ const Sem2Analysis: React.FC = () => {
           });
           uniqueMarks.add(currentMark);
         }
-
-        // If we have 2 unique scores and the current mark is lower than the second highest score, stop.
-        else if (
-          uniqueMarks.size === 2 &&
-          currentMark < toppersList[toppersList.length - 1].marks
-        ) {
-          break;
-        }
+        if (uniqueMarks.size >= 2 && !uniqueMarks.has(currentMark)) break;
       }
       subjectToppers[subjectMapping[markKey]] = toppersList;
     });
@@ -533,52 +467,59 @@ const Sem2Analysis: React.FC = () => {
     } as SummaryData;
   }, [parsedData]);
 
+  // --- Render ---
   return (
     <div className="font-serif p-8 max-w-7xl mx-auto my-5 border border-gray-300 shadow-xl bg-white rounded-lg">
       <div className="text-center mb-6 pb-4 border-b border-dashed border-gray-300">
         <h2 className="text-2xl font-bold text-gray-800 mb-3">
-          Upload B.E. Semester II Result CSV
+          B.E. Semester II Result Analysis (Database)
         </h2>
-        <input
-          type="file"
-          accept=".csv"
-          onChange={handleFileUpload}
-          className="p-2 border border-gray-400 rounded-md shadow-sm text-sm"
-        />
-        {fileName && (
-          <p className="mt-2 text-sm text-gray-600">
-            Loaded File: <strong className="text-blue-700">{fileName}</strong>
+
+        {loading && (
+          <p className="text-blue-600 font-semibold animate-pulse">
+            Loading data from database...
           </p>
         )}
-        {error && <p className="mt-2 text-red-600 font-bold">❌ {error}</p>}
+
+        {error && (
+          <div className="bg-red-50 border border-red-300 p-4 rounded text-red-800 mx-auto max-w-3xl mt-4">
+            <p className="font-bold text-lg mb-2">⚠️ Error</p>
+            <p>{error}</p>
+          </div>
+        )}
+
+        {!loading && parsedData.length === 0 && !error && (
+          <div className="bg-yellow-50 border border-yellow-200 p-4 rounded text-yellow-800">
+            <p>No records found in the database for Semester II.</p>
+          </div>
+        )}
+
+        {!loading && parsedData.length > 0 && (
+          <p className="text-green-700 font-medium mt-2">
+            Successfully loaded {parsedData.length} records.
+          </p>
+        )}
       </div>
+
       {parsedData.length > 0 && (
         <div className="text-center mb-6 space-x-4">
           <button
             onClick={downloadPdf}
             disabled={isDownloading}
-            className={`px-6 py-2 rounded-lg text-white font-semibold transition duration-150 ${
-              isDownloading
-                ? "bg-gray-400 cursor-not-allowed"
-                : "bg-red-600 hover:bg-red-700 shadow-lg"
-            }`}
+            className={`px-6 py-2 rounded-lg text-white font-semibold transition duration-150 ${isDownloading ? "bg-gray-400 cursor-not-allowed" : "bg-red-600 hover:bg-red-700 shadow-lg"}`}
           >
             {isDownloading ? "Generating PDF..." : "⬇️ Download as PDF"}
           </button>
-
           <button
             onClick={downloadPng}
             disabled={isDownloading}
-            className={`px-6 py-2 rounded-lg text-white font-semibold transition duration-150 ${
-              isDownloading
-                ? "bg-gray-400 cursor-not-allowed"
-                : "bg-green-600 hover:bg-green-700 shadow-lg"
-            }`}
+            className={`px-6 py-2 rounded-lg text-white font-semibold transition duration-150 ${isDownloading ? "bg-gray-400 cursor-not-allowed" : "bg-green-600 hover:bg-green-700 shadow-lg"}`}
           >
             {isDownloading ? "Capturing Image..." : "⬇️ Download as PNG"}
           </button>
         </div>
       )}
+
       {parsedData.length > 0 && (
         <div className="result-analysis-view">
           <div ref={subjectAnalysisRef}>
@@ -586,12 +527,14 @@ const Sem2Analysis: React.FC = () => {
           </div>
 
           <div className="my-8 border-t border-dashed border-gray-400"></div>
+
           <div ref={overallSummaryRef} className="p-4">
             <header className="text-center mb-8">
               <h3 className="text-xl mt-4 pb-1 border-b-2 border-gray-700 inline-block font-semibold text-red-700">
-                RESULT ANALYSIS SUMMARY (SEM II)
+                RESULT ANALYSIS SUMMARY
               </h3>
             </header>
+
             <section className="summary-section mb-8">
               <h3 className="bg-gray-100 p-2 pl-4 mt-6 border-l-4 border-blue-700 text-lg font-semibold text-gray-800">
                 OVERALL RESULT
@@ -613,6 +556,7 @@ const Sem2Analysis: React.FC = () => {
                 </strong>
               </p>
             </section>
+
             <section className="gender-analysis-section mb-8">
               <h3 className="bg-gray-100 p-2 pl-4 mt-6 border-l-4 border-blue-700 text-lg font-semibold text-gray-800">
                 GENDER-WISE ANALYSIS
@@ -668,6 +612,7 @@ const Sem2Analysis: React.FC = () => {
                 </table>
               </div>
             </section>
+
             <section className="toppers-section mb-8">
               <h3 className="bg-gray-100 p-2 pl-4 mt-6 border-l-4 border-blue-700 text-lg font-semibold text-gray-800">
                 TOPPER IN OVERALL
@@ -708,6 +653,7 @@ const Sem2Analysis: React.FC = () => {
                 </table>
               </div>
             </section>
+
             <section className="subject-toppers-section mb-8">
               <h3 className="bg-gray-100 p-2 pl-4 mt-6 border-l-4 border-blue-700 text-lg font-semibold text-gray-800">
                 TOPPER IN SUBJECT (Top Two Scores)
@@ -744,7 +690,6 @@ const Sem2Analysis: React.FC = () => {
                             </tr>
                           </thead>
                           <tbody>
-                            {/* FIX: Ensure only top two scores (and ties) are rendered */}
                             {toppers.map((student) => {
                               let displayRank: number | string = "";
 
@@ -753,7 +698,6 @@ const Sem2Analysis: React.FC = () => {
                               } else if (student.marks === rank2Mark) {
                                 displayRank = 2;
                               } else {
-                                // Exclude students outside the top two unique scores
                                 return null;
                               }
 
@@ -773,7 +717,7 @@ const Sem2Analysis: React.FC = () => {
                                     {student.name}
                                   </td>
                                   <td className="p-1 border border-gray-300">
-                                    {student.marks.toString()}
+                                    {student.marks}
                                   </td>
                                 </tr>
                               );
@@ -797,6 +741,7 @@ const Sem2Analysis: React.FC = () => {
               </div>
             </section>
           </div>
+
           <section className="detailed-results">
             <h3 className="bg-red-100 p-2 pl-4 mt-6 border-l-4 border-red-700 text-lg font-semibold text-gray-800">
               DETAILED STUDENT SCORE CARD (NOT included in downloads)
@@ -841,7 +786,8 @@ const Sem2Analysis: React.FC = () => {
                       </td>
                       <td
                         className={`p-2 border border-gray-300 font-bold ${
-                          student.Result === "Successful"
+                          student.Result === "Successful" ||
+                          student.Result === "P"
                             ? "text-green-600"
                             : "text-red-600"
                         }`}
