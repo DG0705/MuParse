@@ -1233,6 +1233,7 @@ const useDownloadReport = (
   toast: any
 ) => {
   const [isDownloading, setIsDownloading] = useState(false);
+  
 
   const getFullHtmlContent = (
     contentRef: React.RefObject<HTMLDivElement>,
@@ -1453,6 +1454,7 @@ const useDownloadReport = (
 const Sem8Analysis: React.FC = () => {
   const { toast } = useToast(); 
   const [parsedData, setParsedData] = useState<StudentData[]>([]);
+  const [selectedYear, setSelectedYear] = useState<string>("");
   const [subjectMapping, setSubjectMapping] = useState<{
     [key: string]: string;
   }>({});
@@ -1473,7 +1475,9 @@ const Sem8Analysis: React.FC = () => {
     const fetchStudents = async () => {
       try {
         setLoading(true);
-        const res = await fetch("http://localhost:5000/api/students?semester=8");
+        // Note: Sem 8 uses the general /api/students endpoint in your code
+        const url = `http://localhost:5000/api/students?semester=8&prnPrefix=${selectedYear}`;
+        const res = await fetch(url);
         if (!res.ok) throw new Error("Failed to fetch data from server");
 
         const json = await res.json();
@@ -1517,7 +1521,7 @@ const Sem8Analysis: React.FC = () => {
     };
 
     fetchStudents();
-  }, []);
+  }, [selectedYear]);
 
   // --- Calculation Logic ---
   const summary: SummaryData = useMemo(() => {
@@ -1695,6 +1699,20 @@ const Sem8Analysis: React.FC = () => {
         <h2 className="text-2xl font-bold text-gray-800 mb-3">
           B.E. Semester VIII Result Analysis (Database)
         </h2>
+        <div className="mt-4 flex justify-center items-center gap-3">
+          <label className="font-semibold text-gray-700">Filter by Admission Year:</label>
+          <select 
+            value={selectedYear} 
+            onChange={(e) => setSelectedYear(e.target.value)}
+            className="border border-gray-300 rounded px-3 py-1 outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">All Batches</option>
+            <option value="2021">2021</option>
+            <option value="2022">2022</option>
+            <option value="2023">2023</option>
+            <option value="2024">2024</option>
+          </select>
+        </div>
 
         {loading && (
           <p className="text-blue-600 font-semibold animate-pulse">

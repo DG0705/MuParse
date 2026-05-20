@@ -300,151 +300,151 @@ const semesterSubjectMap = {
   },
 };
 
-exports.getBatchAnalytics = async (req, res) => {
-  try {
-    const requestedSemester = req.query.semester;
+// exports.getBatchAnalytics = async (req, res) => {
+//   try {
+//     const requestedSemester = req.query.semester;
 
-    let records = await AcademicRecord.find({});
+//     let records = await AcademicRecord.find({});
 
-    if (!records || records.length === 0) {
-      return res
-        .status(404)
-        .json({ success: false, message: "No records found." });
-    }
+//     if (!records || records.length === 0) {
+//       return res
+//         .status(404)
+//         .json({ success: false, message: "No records found." });
+//     }
 
-    // --- SAFE FILTER LOGIC ---
-    if (requestedSemester && requestedSemester !== "All") {
-      records = records.filter((record) => {
-        let semString = record.semester
-          ? String(record.semester).replace(/\D/g, "")
-          : "Unknown";
-        return semString === String(requestedSemester); // Forces safe string comparison!
-      });
-    }
+//     // --- SAFE FILTER LOGIC ---
+//     if (requestedSemester && requestedSemester !== "All") {
+//       records = records.filter((record) => {
+//         let semString = record.semester
+//           ? String(record.semester).replace(/\D/g, "")
+//           : "Unknown";
+//         return semString === String(requestedSemester); // Forces safe string comparison!
+//       });
+//     }
 
-    // If filtering results in 0 students (e.g. no Sem 8 data uploaded yet), don't crash!
-    if (records.length === 0) {
-      return res.status(200).json({
-        success: true,
-        data: {
-          totalStudents: 0,
-          personaDistribution: [],
-          bottlenecks: [],
-          atRiskExport: [],
-        },
-      });
-    }
+//     // If filtering results in 0 students (e.g. no Sem 8 data uploaded yet), don't crash!
+//     if (records.length === 0) {
+//       return res.status(200).json({
+//         success: true,
+//         data: {
+//           totalStudents: 0,
+//           personaDistribution: [],
+//           bottlenecks: [],
+//           atRiskExport: [],
+//         },
+//       });
+//     }
 
-    // ... (Keep the filter logic above exactly as it is) ...
+//     // ... (Keep the filter logic above exactly as it is) ...
 
-    let totalStudents = new Set();
-    let personas = {
-      "Consistent Performer": 0,
-      "Mid-Tier / Struggling": 0,
-      "Critical Attention Needed": 0,
-    };
-    let subjectFailures = {};
+//     let totalStudents = new Set();
+//     let personas = {
+//       "Consistent Performer": 0,
+//       "Mid-Tier / Struggling": 0,
+//       "Critical Attention Needed": 0,
+//     };
+//     let subjectFailures = {};
 
-    // NEW: We will temporarily store each student's total SGPI here to average it later
-    let studentAverages = {};
+//     // NEW: We will temporarily store each student's total SGPI here to average it later
+//     let studentAverages = {};
 
-    // 1. FIRST PASS: Collect the data and find subject bottlenecks
-    records.forEach((record) => {
-      try {
-        totalStudents.add(record.prn);
-        let prn = record.prn;
-        let sgpi = parseFloat(record.sgpi) || 0;
-        let semString = record.semester
-          ? String(record.semester).replace(/\D/g, "")
-          : "Unknown";
+//     // 1. FIRST PASS: Collect the data and find subject bottlenecks
+//     records.forEach((record) => {
+//       try {
+//         totalStudents.add(record.prn);
+//         let prn = record.prn;
+//         let sgpi = parseFloat(record.sgpi) || 0;
+//         let semString = record.semester
+//           ? String(record.semester).replace(/\D/g, "")
+//           : "Unknown";
 
-        // Add this semester's SGPI to the student's total pool
-        if (!studentAverages[prn]) {
-          studentAverages[prn] = { totalSgpi: 0, count: 0 };
-        }
-        studentAverages[prn].totalSgpi += sgpi;
-        studentAverages[prn].count += 1;
+//         // Add this semester's SGPI to the student's total pool
+//         if (!studentAverages[prn]) {
+//           studentAverages[prn] = { totalSgpi: 0, count: 0 };
+//         }
+//         studentAverages[prn].totalSgpi += sgpi;
+//         studentAverages[prn].count += 1;
 
-        // Track Subject Bottlenecks Safely
-        if (record.subjects) {
-          record.subjects.forEach((marks, subjectCode) => {
-            const markStr = marks ? String(marks).toUpperCase().trim() : "";
+//         // Track Subject Bottlenecks Safely
+//         if (record.subjects) {
+//           record.subjects.forEach((marks, subjectCode) => {
+//             const markStr = marks ? String(marks).toUpperCase().trim() : "";
 
-            // --- APPLY THE STRICT REGEX HERE TOO ---
-            if (/^\d*F$|^AB$|^ABSENT$/i.test(markStr)) {
-              let readableName = subjectCode;
-              if (
-                semesterSubjectMap[semString] &&
-                semesterSubjectMap[semString][subjectCode]
-              ) {
-                readableName = semesterSubjectMap[semString][subjectCode];
-              }
+//             // --- APPLY THE STRICT REGEX HERE TOO ---
+//             if (/^\d*F$|^AB$|^ABSENT$/i.test(markStr)) {
+//               let readableName = subjectCode;
+//               if (
+//                 semesterSubjectMap[semString] &&
+//                 semesterSubjectMap[semString][subjectCode]
+//               ) {
+//                 readableName = semesterSubjectMap[semString][subjectCode];
+//               }
 
-              subjectFailures[readableName] =
-                (subjectFailures[readableName] || 0) + 1;
-            }
-          });
-        }
-      } catch (innerError) {
-        console.warn(`Skipped broken record for PRN: ${record.prn}`);
-      }
-    });
+//               subjectFailures[readableName] =
+//                 (subjectFailures[readableName] || 0) + 1;
+//             }
+//           });
+//         }
+//       } catch (innerError) {
+//         console.warn(`Skipped broken record for PRN: ${record.prn}`);
+//       }
+//     });
 
-    // 2. SECOND PASS: Calculate Personas based on AVERAGE SGPI per student
-    let atRiskStudentsList = [];
+//     // 2. SECOND PASS: Calculate Personas based on AVERAGE SGPI per student
+//     let atRiskStudentsList = [];
 
-    for (const prn in studentAverages) {
-      let stats = studentAverages[prn];
-      let avgSgpi = stats.totalSgpi / stats.count; // This is where the 0s drag the average down!
+//     for (const prn in studentAverages) {
+//       let stats = studentAverages[prn];
+//       let avgSgpi = stats.totalSgpi / stats.count; // This is where the 0s drag the average down!
 
-      if (avgSgpi >= 7.0) {
-        personas["Consistent Performer"]++;
-      } else if (avgSgpi >= 4.0 && avgSgpi < 7.0) {
-        personas["Mid-Tier / Struggling"]++;
-      } else {
-        personas["Critical Attention Needed"]++;
-        // Save their average SGPI to 2 decimal places for the Excel export
-        atRiskStudentsList.push({
-          prn: prn,
-          sgpi: avgSgpi.toFixed(2),
-          status: "High KT Risk",
-        });
-      }
-    }
+//       if (avgSgpi >= 7.0) {
+//         personas["Consistent Performer"]++;
+//       } else if (avgSgpi >= 4.0 && avgSgpi < 7.0) {
+//         personas["Mid-Tier / Struggling"]++;
+//       } else {
+//         personas["Critical Attention Needed"]++;
+//         // Save their average SGPI to 2 decimal places for the Excel export
+//         atRiskStudentsList.push({
+//           prn: prn,
+//           sgpi: avgSgpi.toFixed(2),
+//           status: "High KT Risk",
+//         });
+//       }
+//     }
 
-    const personaChartData = Object.keys(personas).map((key) => ({
-      name: key,
-      value: personas[key],
-      fill:
-        key === "Consistent Performer"
-          ? "#10b981"
-          : key === "Mid-Tier / Struggling"
-            ? "#f59e0b"
-            : "#ef4444",
-    }));
+//     const personaChartData = Object.keys(personas).map((key) => ({
+//       name: key,
+//       value: personas[key],
+//       fill:
+//         key === "Consistent Performer"
+//           ? "#10b981"
+//           : key === "Mid-Tier / Struggling"
+//             ? "#f59e0b"
+//             : "#ef4444",
+//     }));
 
-    const bottleneckChartData = Object.keys(subjectFailures)
-      .map((key) => ({ subject: key, KTs: subjectFailures[key] }))
-      .sort((a, b) => b.KTs - a.KTs)
-      .slice(0, 20);
+//     const bottleneckChartData = Object.keys(subjectFailures)
+//       .map((key) => ({ subject: key, KTs: subjectFailures[key] }))
+//       .sort((a, b) => b.KTs - a.KTs)
+//       .slice(0, 20);
 
-    // ... (Keep the res.status(200) below exactly as it is) ...
-    res.status(200).json({
-      success: true,
-      data: {
-        totalStudents: totalStudents.size,
-        personaDistribution: personaChartData,
-        bottlenecks: bottleneckChartData,
-        atRiskExport: atRiskStudentsList,
-      },
-    });
-  } catch (error) {
-    console.error("CRITICAL Analytics Error:", error);
-    res
-      .status(500)
-      .json({ success: false, message: "Failed to generate analytics." });
-  }
-};
+//     // ... (Keep the res.status(200) below exactly as it is) ...
+//     res.status(200).json({
+//       success: true,
+//       data: {
+//         totalStudents: totalStudents.size,
+//         personaDistribution: personaChartData,
+//         bottlenecks: bottleneckChartData,
+//         atRiskExport: atRiskStudentsList,
+//       },
+//     });
+//   } catch (error) {
+//     console.error("CRITICAL Analytics Error:", error);
+//     res
+//       .status(500)
+//       .json({ success: false, message: "Failed to generate analytics." });
+//   }
+// };
 
 exports.getGoldenStudents = async (req, res) => {
   try {

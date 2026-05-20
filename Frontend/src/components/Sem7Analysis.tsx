@@ -262,6 +262,7 @@ const useDownloadReport = (
 const Sem7Analysis: React.FC = () => {
   const [parsedData, setParsedData] = useState<StudentData[]>([]);
   const [subjectKeys, setSubjectKeys] = useState<string[]>([]);
+  const [selectedYear, setSelectedYear] = useState<string>("")
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
@@ -279,35 +280,26 @@ const Sem7Analysis: React.FC = () => {
     const fetchStudents = async () => {
       try {
         setLoading(true);
-        const res = await fetch("http://localhost:5000/api/students/sem7");
-        if (!res.ok) throw new Error("Failed to fetch data from server");
+        // Include prnPrefix
+        const res = await fetch(`http://localhost:5000/api/students/sem7?prnPrefix=${selectedYear}`);
+        if (!res.ok) throw new Error("Failed to fetch data");
 
         const json = await res.json();
         if (Array.isArray(json) && json.length > 0) {
-          // Identify any key dynamically returned from the DB mapper that represents marks
-          const dynamicSubjectKeys = Object.keys(json[0]).filter((h) =>
-            h.endsWith("_Marks"),
-          );
+          const dynamicSubjectKeys = Object.keys(json[0]).filter((h) => h.endsWith("_Marks"));
           setSubjectKeys(dynamicSubjectKeys);
           setParsedData(json);
         } else {
           setParsedData([]);
         }
       } catch (err: any) {
-        console.error(err);
-        setError("Could not load data. Ensure the backend is running.");
-        toast({
-          title: "Fetch Error",
-          description: err.message,
-          variant: "destructive",
-        });
+        setError(err.message);
       } finally {
         setLoading(false);
       }
     };
-
     fetchStudents();
-  }, [toast]);
+  }, [toast, selectedYear]);
 
   // --- Calculation Logic ---
   const summary: SummaryData = useMemo(() => {
@@ -463,6 +455,20 @@ const Sem7Analysis: React.FC = () => {
         <h2 className="text-2xl font-bold text-gray-800 mb-3">
           B.E. Semester VII Result Analysis (Database)
         </h2>
+        <div className="mt-4 flex justify-center items-center gap-3">
+          <label className="font-semibold text-gray-700">Filter by Admission Year:</label>
+          <select 
+            value={selectedYear} 
+            onChange={(e) => setSelectedYear(e.target.value)}
+            className="border border-gray-300 rounded px-3 py-1 outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">All Batches</option>
+            <option value="2021">2021</option>
+            <option value="2022">2022</option>
+            <option value="2023">2023</option>
+            <option value="2024">2024</option>
+          </select>
+        </div>
 
         {loading && (
           <p className="text-blue-600 font-semibold animate-pulse">

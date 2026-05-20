@@ -14,9 +14,6 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import axios from "axios";
-import { AnalyticsDashboard } from "./AnalyticsDashboard";
-import { MLInsightCard } from "./MLInsightCard";
-import MLAnalysis from "./MLAnalysis";
 
 
 
@@ -94,7 +91,7 @@ const Home = () => {
   const semesterTools = Array.from({ length: 8 }, (_, i) => ({
     num: i + 1,
     converter: `/sem${i + 1}-converter`,
-    analysis: [1, 2, 7, 8].includes(i + 1) ? `/sem${i + 1}-analysis` : null
+    analysis: [1, 2,3,4,5,6, 7, 8].includes(i + 1) ? `/sem${i + 1}-analysis` : null
   }));
 
   // --- States ---
@@ -463,12 +460,7 @@ const Home = () => {
                       </Card>
                     </div>
 
-{/* AI Prediction Card */}
-<div className="mt-6">
-  {studentData?.profile?.prn && (
-    <MLInsightCard prn={studentData.profile.prn} />
-  )}
-</div>
+
 
 
                     <Separator className="my-6" />
@@ -736,21 +728,7 @@ const Home = () => {
           </TabsContent>
 
 
-{/* ==================== 4. ANALYSIS TAB ==================== */}
-          <TabsContent value="analysis" className="animate-in fade-in-50">
-            <div className="bg-white rounded-xl shadow-sm border p-4">
-               {/* This will render the beautiful Pie Charts and Bar Charts! */}
-               <AnalyticsDashboard />
-            </div>
-          </TabsContent>
 
-          <TabsContent value="analysis" className="animate-in fade-in-50">
-            <div className="bg-white rounded-xl shadow-sm border p-4">
-               {/* This will render the beautiful Pie Charts and Bar Charts! */}
-               {/* <AnalyticsDashboard /> */}
-               <MLAnalysis/>
-            </div>
-          </TabsContent>
 
 
         </Tabs>

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
-import { MLInsightCard } from "./MLInsightCard";
+// import { MLInsightCard } from "./MLInsightCard";
 
 // --- DICTIONARY FOR FIRST YEAR MAPPING ---
 const semesterSubjectMap: Record<string, Record<string, string>> = {
@@ -134,9 +134,9 @@ const StudentHistory = () => {
               </Card>
             </div>
 
-            <div className="my-6 w-full">
+            {/* <div className="my-6 w-full">
               {data?.profile?.prn && <MLInsightCard prn={data.profile.prn} />}
-            </div>
+            </div> */}
 
             <Separator />
 

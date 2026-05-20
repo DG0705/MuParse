@@ -11,11 +11,11 @@ export interface StudentData {
   Gender: string;
   Result: string;
   SGPI: string;
-  Eng_Maths_I_Marks: string;
-  Eng_Physics_I_Marks: string;
-  Eng_Chem_I_Marks: string;
-  Eng_Mechanics_Marks: string;
-  Basic_Elec_Eng_Marks: string;
+  "Eng_Maths-II_Marks": string;
+  "Eng_Physics-II_Marks": string;
+  "Eng_Chem-II_Marks": string;
+  Eng_Graphics_Marks: string;
+  "C Prog_Marks": string;
   [key: string]: any;
 }
 
@@ -54,20 +54,20 @@ export interface SummaryData {
 
 // --- Constants ---
 const subjectMapping: { [key: string]: string } = {
-  Eng_Maths_I_Marks: "Eng. Maths I",
-  Eng_Physics_I_Marks: "Eng. Physics I",
-  Eng_Chem_I_Marks: "Eng. Chem I",
-  Eng_Mechanics_Marks: "Mechanics",
-  Basic_Elec_Eng_Marks: "Basic Elec. Eng.",
+  "Eng_Maths-II_Marks": "Eng. Maths II",
+  "Eng_Physics-II_Marks": "Eng. Physics II",
+  "Eng_Chem-II_Marks": "Eng. Chem II",
+  Eng_Graphics_Marks: "Eng. Graphics",
+  "C Prog_Marks": "C Programming",
 };
 const subjectKeys = Object.keys(subjectMapping);
 
 const teacherAssignment: { [key: string]: string } = {
-  "Eng. Maths I": "XYX",
-  "Eng. Physics I": "XYZ",
-  "Eng. Chem I": "XYZ",
-  Mechanics: "XYZ",
-  "Basic Elec. Eng.": "XYZ",
+  "Eng. Maths II": "XYZ",
+  "Eng. Physics II": "XYZ",
+  "Eng. Chem II": "XYZ",
+  "Eng. Graphics": "XYZ",
+  "C Programming": "XYZ",
 };
 
 // --- PDF/PNG Download Logic ---
@@ -169,7 +169,7 @@ const useDownloadReport = (
 
       const analysisHtml = getFullHtmlContent(
         subjectAnalysisRef,
-        "RESULT ANALYSIS B.E. SEM I (Subjectwise Report)",
+        "RESULT ANALYSIS B.E. SEM III (Subjectwise Report)",
       );
       if (analysisHtml) {
         document.body.appendChild(analysisHtml);
@@ -194,7 +194,7 @@ const useDownloadReport = (
 
       const summaryHtml = getFullHtmlContent(
         overallSummaryRef,
-        "RESULT ANALYSIS B.E. SEM I (Summary & Toppers)",
+        "RESULT ANALYSIS B.E. SEM II (Summary & Toppers)",
       );
       if (summaryHtml) {
         document.body.appendChild(summaryHtml);
@@ -216,7 +216,7 @@ const useDownloadReport = (
         );
       }
 
-      pdf.save("Result_Analysis_Combined_Tall_Report.pdf");
+      pdf.save("Result_Analysis_Combined_Tall_Report_Sem3.pdf");
     } catch (error) {
       console.error("Critical error during PDF generation:", error);
       alert("PDF Generation Failed! Please try downloading as PNG.");
@@ -240,7 +240,7 @@ const useDownloadReport = (
       combinedContainer.style.backgroundColor = "white";
       const page1Html = getFullHtmlContent(
         subjectAnalysisRef,
-        "RESULT ANALYSIS B.E. SEM I (Subjectwise Report)",
+        "RESULT ANALYSIS B.E. SEM III (Subjectwise Report)",
       );
       if (page1Html)
         page1Html.childNodes.forEach((node) =>
@@ -252,7 +252,7 @@ const useDownloadReport = (
       combinedContainer.appendChild(separator);
       const page2Html = getFullHtmlContent(
         overallSummaryRef,
-        "RESULT ANALYSIS B.E. SEM I (Summary & Toppers)",
+        "RESULT ANALYSIS B.E. SEM III (Summary & Toppers)",
       );
       if (page2Html)
         page2Html.childNodes.forEach((node) =>
@@ -263,7 +263,7 @@ const useDownloadReport = (
       const canvas = await html2canvas(combinedContainer, html2canvasOptions);
       const link = document.createElement("a");
       link.href = canvas.toDataURL(`image/png`, 1.0);
-      link.download = "Result_Analysis_Combined.png";
+      link.download = "Result_Analysis_Combined_Sem3.png";
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -281,11 +281,11 @@ const useDownloadReport = (
 };
 
 // --- Main Component ---
-const Sem1Analysis: React.FC = () => {
+const Sem3Analysis: React.FC = () => {
   const [parsedData, setParsedData] = useState<StudentData[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [selectedYear, setSelectedYear] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
-  const [selectedYear, setSelectedYear] = useState<string>(""); // New State
   const { toast } = useToast();
 
   const subjectAnalysisRef = useRef<HTMLDivElement>(null);
@@ -301,22 +301,26 @@ const Sem1Analysis: React.FC = () => {
     const fetchStudents = async () => {
       try {
         setLoading(true);
-        // Added prnPrefix query parameter
-        const url = `http://localhost:5000/api/students/sem1?prnPrefix=${selectedYear}`;
-        const res = await fetch(url);
+        const res = await fetch(`http://localhost:5000/api/students/sem3?prnPrefix=${selectedYear}`);
         if (!res.ok) throw new Error("Failed to fetch data from server");
 
         const json = await res.json();
         setParsedData(json);
       } catch (err: any) {
+        console.error(err);
         setError("Could not load data. Ensure the backend is running.");
+        toast({
+          title: "Fetch Error",
+          description: err.message,
+          variant: "destructive",
+        });
       } finally {
         setLoading(false);
       }
     };
 
     fetchStudents();
-  }, [toast, selectedYear]);
+  }, [toast,selectedYear]);
 
   // --- Calculation Logic ---
   const summary: SummaryData = useMemo(() => {
@@ -385,7 +389,7 @@ const Sem1Analysis: React.FC = () => {
       const totalAppeared = studentsWithMarks.length;
 
       const passMark =
-        subjectName === "Eng. Physics I" || subjectName === "Eng. Chem I"
+        subjectName === "Eng. Physics II" || subjectName === "Eng. Chem II"
           ? 30
           : 40;
 
@@ -469,7 +473,7 @@ const Sem1Analysis: React.FC = () => {
     <div className="font-serif p-8 max-w-7xl mx-auto my-5 border border-gray-300 shadow-xl bg-white rounded-lg">
       <div className="text-center mb-6 pb-4 border-b border-dashed border-gray-300">
         <h2 className="text-2xl font-bold text-gray-800 mb-3">
-          B.E. Semester I Result Analysis (Database)
+          B.E. Semester III Result Analysis (Database)
         </h2>
         <div className="mt-4 flex justify-center items-center gap-3">
           <label className="font-semibold text-gray-700">Filter by Admission Year:</label>
@@ -501,7 +505,7 @@ const Sem1Analysis: React.FC = () => {
 
         {!loading && parsedData.length === 0 && !error && (
           <div className="bg-yellow-50 border border-yellow-200 p-4 rounded text-yellow-800">
-            <p>No records found in the database.</p>
+            <p>No records found in the database for Semester II.</p>
           </div>
         )}
 
@@ -817,4 +821,4 @@ const Sem1Analysis: React.FC = () => {
   );
 };
 
-export default Sem1Analysis;
+export default Sem3Analysis;

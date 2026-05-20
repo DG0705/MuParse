@@ -23,10 +23,13 @@ import { Sem6Converter } from "./components/Sem6Converter";
 import Sem8Analysis from "./components/Sem8Analysis";
 import Sem1Analysis from "./components/Sem1Analysis";
 import Sem2Analysis from "./components/Sem2Analysis";
+import Sem3Analysis from "./components/Sem3Analysis";
+import Sem4Analysis from "./components/Sem4Analysis";
+import Sem5Analysis from "./components/Sem5Analysis";
+import Sem6Analysis from "./components/Sem6Analysis";
 import Sem7Analysis from "./components/Sem7Analysis";
 import StudentHistory from "./components/StudentHistory";
 import IsolatedPdfConverter from "./components/IsolatedPdfConverter";
-import MLAnalysis from "./components/MLAnalysis";
 import Sem1BlockConverter from "./components/Sem1BlockConverter";
 import Sem2BlockConverter from "./components/Sem2BlockConverter";
 import { GoldenStudentReport } from "./components/GoldenStudentReport";
@@ -95,8 +98,16 @@ const App = () => (
           />
           <Route path="/sem7-converter" element={<Sem7Converter />} />
           <Route path="/sem8-converter" element={<Sem8Converter />} />
+
+
+
+
           <Route path="/sem1-analysis" element={<Sem1Analysis />} />
           <Route path="/sem2-analysis" element={<Sem2Analysis />} />
+          <Route path="/sem3-analysis" element={<Sem3Analysis />} />
+          <Route path="/sem4-analysis" element={<Sem4Analysis />} />
+          <Route path="/sem5-analysis" element={<Sem5Analysis />} />
+          <Route path="/sem6-analysis" element={<Sem6Analysis />} />
           <Route path="/sem7-analysis" element={<Sem7Analysis />} />
           <Route path="/sem8-analysis" element={<Sem8Analysis />} />
           <Route path="/golden-students" element={<GoldenStudentReport />} />
