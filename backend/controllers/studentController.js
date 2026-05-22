@@ -200,13 +200,16 @@ const uploadCsvData = async (req, res) => {
 
       const finalPRN = rawPRN || `TEMP_${cleanSeatNo}`;
 
-      // 1. Extract using BOTH variations
+      // 1. EXTRACT THE ADMISSION YEAR (First 4 digits of PRN)
+      const batchYear = rawPRN && rawPRN.length >= 4 ? rawPRN.substring(0, 4) : "Unknown";
+
+      // 2. Extract using BOTH variations
       const extractedSGPI = s["SGPI"] || s["SGPA"] || "0";
       const extractedTotal = s["Grand_Total"] || s["Total Marks"] || "0";
       const extractedResult = s["Result"] || s["Final Result"] || "N/A";
 
       const flatSubjects = {};
-      // 2. Exclude BOTH variations so they don't end up in the subjects list
+      // 3. Exclude BOTH variations so they don't end up in the subjects list
       const excludedKeys = [
         "seat no",
         "seat_no",
@@ -230,7 +233,10 @@ const uploadCsvData = async (req, res) => {
         updateOne: {
           filter: { prn: finalPRN },
           update: {
-            $set: { gender: s["Gender"] || "" },
+            $set: { 
+              gender: s["Gender"] || "",
+              batch: batchYear // <-- Saving the batch explicitly here
+            },
             $setOnInsert: { name: s["Name"] || "Unknown" },
           },
           upsert: true,
@@ -241,7 +247,6 @@ const uploadCsvData = async (req, res) => {
         updateOne: {
           filter: { prn: finalPRN, semester: semNum },
           update: {
-            // 3. Save the properly extracted values
             $set: {
               seatNo: cleanSeatNo,
               sgpi: extractedSGPI,
@@ -273,56 +278,6 @@ const uploadCsvData = async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 };
-
-// --- DATA RETRIEVAL FOR ANALYSIS TABS ---
-// const getStudents = async (req, res) => {
-//   try {
-//     const { semester, isNEP } = req.query;
-
-//     if (semester) {
-//       if (isNEP === "true") {
-//         const records = await NepAcademicRecord.find({
-//           semester: Number(semester),
-//         });
-//         const formatted = records.map((r) => ({
-//           seatNo: r.seatNo,
-//           name: r.name,
-//           gender: r.gender,
-//           results: { sgpi: r.sgpi, finalResult: r.finalResult },
-//           subjects: r.subjects || {},
-//         }));
-//         return res.json(formatted);
-//       } else {
-//         const records = await AcademicRecord.find({
-//           semester: Number(semester),
-//         });
-//         const prns = records.map((r) => r.prn);
-//         const students = await StudentMaster.find({ prn: { $in: prns } });
-
-//         const studentMap = {};
-//         students.forEach((s) => (studentMap[s.prn] = s));
-
-//         const formatted = records.map((r) => {
-//           const studentDetails = studentMap[r.prn] || {};
-//           return {
-//             seatNo: r.seatNo,
-//             name: studentDetails.name || "Unknown",
-//             gender: studentDetails.gender || "Unknown",
-//             results: { sgpi: r.sgpi, finalResult: r.finalResult },
-//             subjects: r.subjects || {},
-//           };
-//         });
-//         return res.json(formatted);
-//       }
-//     }
-
-//     const allStudents = await StudentMaster.find({}).limit(100);
-//     res.json(allStudents);
-//   } catch (error) {
-//     res.status(500).json({ message: error.message });
-//   }
-// };
-
 
 const getStudents = async (req, res) => {
   try {
@@ -582,13 +537,16 @@ const getStudentHistory = async (req, res) => {
 
 const getStudentsByBatch = async (req, res) => {
   try {
+    // Exact match on the explicitly stored 'batch' field
     const students = await StudentMaster.find({
-      batch: new RegExp(req.params.batch, "i"),
+      batch: req.params.batch,
     });
+    
     if (students.length === 0)
       return res
         .status(404)
         .json({ message: "No students found for this batch" });
+        
     res.status(200).json(students);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -757,73 +715,6 @@ const uploadAtktCsvData = async (req, res) => {
 // ==========================================
 // 1. SEMESTER 1 - Data Fetcher
 // ==========================================
-// ==========================================
-// SEMESTER 1 - Data Fetcher (Updated with MU Paper Codes)
-// ==========================================
-// const getSem1Students = async (req, res) => {
-//   try {
-//     const records = await AcademicRecord.aggregate([
-//       { $match: { semester: 1 } },
-//       {
-//         $lookup: {
-//           from: "studentmasters", // Ensure this matches your collection name
-//           localField: "prn",
-//           foreignField: "prn",
-//           as: "studentInfo",
-//         },
-//       },
-//       { $unwind: { path: "$studentInfo", preserveNullAndEmptyArrays: true } },
-//     ]);
-
-//     const formattedData = records.map((record) => {
-//       const subjects = record.subjects || {};
-
-//       // Smart Helper to find marks by Paper Code OR by Exact Name
-//       const findMarks = (code, name) => {
-//         // 1. Direct string match first (if you ever manually type the name in DB)
-//         if (subjects[name] !== undefined) return subjects[name];
-
-//         // 2. Loop through paper1code to paper15code to find the matching MU Code
-//         for (let i = 1; i <= 15; i++) {
-//           const pCode = subjects[`paper${i}code`];
-//           // Replace '.0' in case the database saved 58651 as a float (58651.0)
-//           if (pCode && pCode.toString().replace(".0", "") === code) {
-//             return subjects[`paper${i}marks`];
-//           }
-//         }
-//         return "-";
-//       };
-
-//       return {
-//         "Seat No":
-//           record.seatNo || record.studentInfo?.seatNo || record.prn || "N/A",
-//         Name: record.studentInfo?.name || "Unknown",
-//         Gender: record.studentInfo?.gender || "Unknown",
-//         Result: record.finalResult || "N/A",
-//         SGPI: record.sgpi || "0",
-
-//         // Map Database MU Paper Codes to what Sem1Analysis.tsx expects
-//         Eng_Maths_I_Marks: findMarks("58651", "Engineering Mathematics - I"),
-//         Eng_Physics_I_Marks: findMarks("58652", "Engineering Physics - I"),
-//         Eng_Chem_I_Marks: findMarks("58655", "Engineering Chemistry - I"),
-//         Eng_Mechanics_Marks: findMarks("58653", "Engineering Mechanics"),
-//         Basic_Elec_Eng_Marks: findMarks(
-//           "58654",
-//           "Basic Electrical Engineering",
-//         ),
-
-//         // Spread the raw subjects as a fallback
-//         ...subjects,
-//       };
-//     });
-
-//     res.status(200).json(formattedData);
-//   } catch (error) {
-//     console.error("Sem 1 Fetch Error:", error);
-//     res.status(500).json({ success: false, message: error.message });
-//   }
-// };
-
 const getSem1Students = async (req, res) => {
   try {
     const { prnPrefix } = req.query;
@@ -881,6 +772,7 @@ const getSem1Students = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
 const getSem3Students = async (req, res) => {
   try {
     const { prnPrefix } = req.query;
@@ -942,67 +834,6 @@ const getSem3Students = async (req, res) => {
 // ==========================================
 // SEMESTER 2 - Data Fetcher (with MU Paper Codes)
 // ==========================================
-// const getSem2Students = async (req, res) => {
-//   try {
-//     const records = await AcademicRecord.aggregate([
-//       { $match: { semester: 2 } },
-//       {
-//         $lookup: {
-//           from: "studentmasters",
-//           localField: "prn",
-//           foreignField: "prn",
-//           as: "studentInfo",
-//         },
-//       },
-//       { $unwind: { path: "$studentInfo", preserveNullAndEmptyArrays: true } },
-//     ]);
-
-//     const formattedData = records.map((record) => {
-//       const subjects = record.subjects || {};
-
-//       // Smart Helper to find marks by Paper Code OR by Exact Name
-//       const findMarks = (code, name) => {
-//         if (subjects[name] !== undefined) return subjects[name];
-//         for (let i = 1; i <= 15; i++) {
-//           const pCode = subjects[`paper${i}code`];
-//           if (pCode && pCode.toString().replace(".0", "") === code) {
-//             return subjects[`paper${i}marks`];
-//           }
-//         }
-//         return "-";
-//       };
-
-//       return {
-//         "Seat No":
-//           record.seatNo || record.studentInfo?.seatNo || record.prn || "N/A",
-//         Name: record.studentInfo?.name || "Unknown",
-//         Gender: record.studentInfo?.gender || "Unknown",
-//         Result: record.finalResult || "N/A",
-//         SGPI: record.sgpi || "0",
-
-//         // Exact Keys Expected by Sem2Analysis.tsx Mapping
-//         "Eng_Maths-II_Marks": findMarks(
-//           "29711",
-//           "Engineering Mathematics - II",
-//         ),
-//         "Eng_Physics-II_Marks": findMarks("29712", "Engineering Physics - II"),
-//         "Eng_Chem-II_Marks": findMarks("29713", "Engineering Chemistry - II"),
-//         Eng_Graphics_Marks: findMarks("29714", "Engineering Graphics"),
-//         "C Prog_Marks": findMarks("29715", "C Programming"),
-
-//         // Spread the raw subjects as a fallback
-//         ...subjects,
-//       };
-//     });
-
-//     res.status(200).json(formattedData);
-//   } catch (error) {
-//     console.error("Sem 2 Fetch Error:", error);
-//     res.status(500).json({ success: false, message: error.message });
-//   }
-// };
-
-
 const getSem2Students = async (req, res) => {
   try {
     const { prnPrefix } = req.query;
@@ -1073,73 +904,6 @@ const sem7Map = {
   "Major Project - I": "Major_Project_I_Marks",
 };
 
-// const getSem7Students = async (req, res) => {
-//   try {
-//     const records = await AcademicRecord.aggregate([
-//       { $match: { semester: 7 } },
-//       {
-//         $lookup: {
-//           from: "studentmasters",
-//           localField: "prn",
-//           foreignField: "prn",
-//           as: "studentInfo",
-//         },
-//       },
-//       { $unwind: { path: "$studentInfo", preserveNullAndEmptyArrays: true } },
-//     ]);
-
-//     const formattedData = records.map((record) => {
-//       const subjects = record.subjects || {};
-//       let mappedSubjects = {};
-
-//       // 1. Loop through named subjects in DB and convert to Frontend format
-//       for (const [dbKey, marks] of Object.entries(subjects)) {
-//         if (sem7Map[dbKey]) {
-//           mappedSubjects[sem7Map[dbKey]] = marks;
-//         } else {
-//           // Ignore raw paperCodes logic so we don't duplicate names
-//           if (
-//             !dbKey.includes("code") &&
-//             !dbKey.includes("marks") &&
-//             !dbKey.includes("cr")
-//           ) {
-//             const fallbackKey = dbKey.replace(/\s+/g, "_") + "_Marks";
-//             mappedSubjects[fallbackKey] = marks;
-//           }
-//         }
-//       }
-
-//       // 2. Loop through paperCodes specifically (just in case they were uploaded via CSV format)
-//       for (let i = 1; i <= 15; i++) {
-//         const pCode = subjects[`paper${i}code`];
-//         const pMarks = subjects[`paper${i}marks`];
-//         if (pCode && pMarks) {
-//           mappedSubjects[
-//             `SubjectCode_${pCode.toString().replace(".0", "")}_Marks`
-//           ] = pMarks;
-//         }
-//       }
-
-//       return {
-//         "Seat No":
-//           record.seatNo || record.studentInfo?.seatNo || record.prn || "N/A",
-//         Name: record.studentInfo?.name || "Unknown",
-//         Gender: record.studentInfo?.gender || "Unknown",
-//         Result: record.finalResult || "N/A",
-//         SGPI: record.sgpi || "0",
-//         ...mappedSubjects,
-//         ...subjects,
-//       };
-//     });
-
-//     res.status(200).json(formattedData);
-//   } catch (error) {
-//     console.error("Sem 7 Fetch Error:", error);
-//     res.status(500).json({ success: false, message: error.message });
-//   }
-// };
-
-
 const getSem7Students = async (req, res) => {
   try {
     const { prnPrefix } = req.query;
@@ -1202,6 +966,7 @@ const getSem7Students = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
 module.exports = {
   uploadCsvData,
   uploadNepPdfData,

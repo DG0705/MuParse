@@ -4,7 +4,7 @@ const studentMasterSchema = new mongoose.Schema(
   {
     prn: { type: String, required: true, unique: true },
     name: { type: String, required: true },
-    batch: { type: String, default: null }, // "2021", "2022", etc.
+    batch: { type: String, default: null }, 
     gender: { type: String, default: null },
     motherName: { type: String, default: null },
     category: {
