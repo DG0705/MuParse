@@ -1,5 +1,483 @@
-import React, { useMemo, useState } from "react";
-import * as pdfjs from "pdfjs-dist";
+// import React, { useMemo, useState } from "react";
+// import * as pdfjs from "pdfjs-dist";
+// import { Button } from "@/components/ui/button";
+// import { Input } from "@/components/ui/input";
+// import { Card } from "@/components/ui/card";
+// import { useToast } from "@/hooks/use-toast";
+// import { FileSpreadsheet, Upload, BarChart3, Database } from "lucide-react";
+// import SubjectAnalysisReport from "./SubjectAnalysisReport";
+
+// const SUBJECT_RULES: { name: string; components: string[]; shortName: string }[] = [
+//    { name: "INTERNET PROGRAMMING", components: ["ESE", "IA", "TOT"], shortName: "IP" },
+//     { name: "COMPUTER NETWORK SECURITY", components: ["ESE", "IA", "TOT"], shortName: "CNS" },
+//     { name: "ENTREPRENEURSHIP AND E-BUSINESS", components: ["ESE", "IA", "TOT"], shortName: "EEB" },
+//     { name: "SOFTWARE ENGINEERING ", components: ["ESE", "IA", "TOT"], shortName: "SE" },
+//     { name: "DEPARTMENT OPTIONAL SUBJECT", components: ["ESE", "IA", "TOT"], shortName: "ADSA" },
+//     { name: "IP LAB", components: ["PR OR", "TW", "TOT"], shortName: "IP LAB" },
+//     { name: "SECURITY LAB", components: ["PR OR", "TW", "TOT"], shortName: "SECURITY LAB" },
+//     { name: "DevOPs LAB", components: ["PR OR", "TW", "TOT"], shortName: "DevOPs LAB" },
+//     { name: "ADVANCE DevOPs LAB", components: ["PR OR", "TW", "TOT"], shortName: "ADV DevOPs LAB" },
+//     { name: "PROFESSIONAL COMMUNICATION AND ETHICS - II (PCE-II)", components: ["PR OR", "TW", "TOT"], shortName: "PCE-II"},
+//     { name: "MINI PROJECT - 2 A WEB BASED BUSINESS MODEL ", components: ["PR OR", "TW", "TOT"], shortName: "MINI PROJECT 2A" }
+// ];
+
+// const EXPECTED_COMPONENT_COUNT = 33;
+
+// interface SubjectStats {
+//   totalAppeared: number;
+//   totalPassed: number;
+//   passPercentage: string;
+//   marks40_50: number;
+//   marks51_59: number;
+//   marks60_Above: number;
+//   teacher: string;
+// }
+
+// interface AnalysisData {
+//   [subjectName: string]: SubjectStats;
+// }
+
+// const MARK_HEADERS: string[] = [];
+// const GRADE_HEADERS: string[] = [];
+// const TOT_INDICES: { subjectName: string; markIndex: number; gradeIndex: number }[] = [];
+// let currentIndex = 0;
+
+// SUBJECT_RULES.forEach(sub => {
+//     sub.components.forEach((comp, compIndex) => {
+//         const fullMarkHeader = `${sub.shortName} - ${comp} (Marks)`;
+//         const fullGradeHeader = `${sub.shortName} - ${comp} (Grade)`;
+
+//         MARK_HEADERS.push(fullMarkHeader);
+//         GRADE_HEADERS.push(fullGradeHeader);
+
+//         if (comp === 'TOT') {
+//             TOT_INDICES.push({
+//                 subjectName: sub.name,
+//                 markIndex: currentIndex,
+//                 gradeIndex: currentIndex,
+//             });
+//         }
+//         currentIndex++;
+//     });
+// });
+
+// const FINAL_HEADERS: string[] = [
+//     "Seat No",
+//     "Name",
+//     ...MARK_HEADERS,
+//     ...GRADE_HEADERS,
+//     "Total Marks",
+//     "SGPA",
+//     "Final Result",
+// ];
+
+// interface RawStudentRecord {
+//     'Seat No': string;
+//     'Name': string;
+//     'Total Marks': string;
+//     'SGPA': string;
+//     'Final Result': string;
+//     [key: string]: string;
+// }
+
+// const download = (filename: string, content: string, mimeType: string) => {
+//   const blob = new Blob([content], { type: mimeType });
+//   const url = URL.createObjectURL(blob);
+//   const a = document.createElement("a");
+//   a.href = url;
+//   a.download = filename;
+//   a.click();
+//   URL.revokeObjectURL(url);
+// };
+
+// const analyzeStudentRecords = (records: RawStudentRecord[]): AnalysisData => {
+//     const initialStats: AnalysisData = {};
+
+//     TOT_INDICES.forEach(item => {
+//         initialStats[item.subjectName] = {
+//             totalAppeared: 0,
+//             totalPassed: 0,
+//             passPercentage: "0.00%",
+//             marks40_50: 0,
+//             marks51_59: 0,
+//             marks60_Above: 0,
+//             teacher: "N/A (Provide Teacher Data Separately)",
+//         };
+//     });
+
+//     records.forEach(record => {
+//         TOT_INDICES.forEach(item => {
+//             const subjectStats = initialStats[item.subjectName];
+//             if (!subjectStats) return;
+
+//             const markHeader = MARK_HEADERS[item.markIndex];
+//             const gradeHeader = GRADE_HEADERS[item.gradeIndex];
+
+//             const totMarkStr = record[markHeader];
+//             const totGrade = record[gradeHeader];
+
+//             const totMarkNum = parseInt(totMarkStr.replace(/\+/g, '').trim(), 10);
+
+//             const isPassed = !isNaN(totMarkNum) && totGrade !== 'F';
+
+//             if (isPassed) {
+//                 subjectStats.totalPassed++;
+//                 if (totMarkNum >= 60) {
+//                     subjectStats.marks60_Above++;
+//                 } else if (totMarkNum >= 51 && totMarkNum <= 59) {
+//                     subjectStats.marks51_59++;
+//                 } else if (totMarkNum >= 40 && totMarkNum <= 50) {
+//                     subjectStats.marks40_50++;
+//                 }
+//             }
+//         });
+//     });
+
+//     Object.keys(initialStats).forEach(subjectName => {
+//         const stats = initialStats[subjectName];
+//         if (stats.totalAppeared > 0) {
+//             const percentage = (stats.totalPassed / stats.totalAppeared) * 100;
+//             stats.passPercentage = percentage.toFixed(2) + "%";
+//         }
+//     });
+
+//     return initialStats;
+// };
+
+// interface SimplePdfConverterProps {
+//   title: string;
+//   description: string;
+// }
+
+// export const Sem5Converter: React.FC<SimplePdfConverterProps> = ({
+//   title,
+//   description,
+// }) => {
+//   const { toast } = useToast();
+//   const [extractedText, setExtractedText] = useState("");
+//   const [isLoading, setIsLoading] = useState(false);
+//   const [analysisData, setAnalysisData] = useState<AnalysisData | null>(null);
+//   const [studentRecords, setStudentRecords] = useState<RawStudentRecord[]>([]);
+
+//   // --- NEW ATKT STATE ---
+//   const semester = "5";
+//   const [isATKT, setIsATKT] = useState(false);
+//   const [isUploading, setIsUploading] = useState(false);
+//   // ----------------------
+
+//   useMemo(() => {
+//     pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.mjs`;
+//   }, []);
+
+//   const handleFile = async (file?: File | null) => {
+//     if (!file) return;
+//     if (file.type !== "application/pdf") {
+//       toast({ title: "Invalid File Type", description: "Please upload a PDF file.", variant: "destructive" });
+//       return;
+//     }
+
+//     setIsLoading(true);
+//     setExtractedText("");
+//     setAnalysisData(null);
+//     setStudentRecords([]);
+
+//     try {
+//       toast({ title: "Extracting data from PDF..." });
+//       const arrayBuffer = await file.arrayBuffer();
+//       const pdf = await pdfjs.getDocument(arrayBuffer).promise;
+
+//       let fullText = "";
+//       for (let i = 1; i <= pdf.numPages; i++) {
+//         const page = await pdf.getPage(i);
+//         const textContent = await page.getTextContent();
+//         const textItems = textContent.items.filter(
+//           (item) => "str" in item
+//         ) as any[];
+
+//         textItems.sort((a, b) => {
+//           if (Math.abs(a.transform[5] - b.transform[5]) > 5)
+//             return b.transform[5] - a.transform[5];
+//           return a.transform[4] - b.transform[4];
+//         });
+
+//         let pageText = "";
+//         let lastItem: any = null;
+//         for (const item of textItems) {
+//           if (lastItem) {
+//             if (Math.abs(item.transform[5] - lastItem.transform[5]) > 5) {
+//               pageText += "\n";
+//             } else {
+//               const lastItemEndX = lastItem.transform[4] + lastItem.width;
+//               if (item.transform[4] > lastItemEndX + 1) {
+//                 pageText += "\t";
+//               }
+//             }
+//           }
+//           pageText += item.str;
+//           lastItem = item;
+//         }
+//         fullText += pageText + "\n\n";
+//       }
+
+//       setExtractedText(fullText);
+
+//       const { records } = parseTextToStructuredData(fullText);
+//       setStudentRecords(records);
+
+//       toast({
+//         title: "Success!",
+//         description: `PDF data extracted and ${records.length} records analyzed.`,
+//       });
+
+//     } catch (error) {
+//       console.error("Failed to process PDF:", error);
+//       toast({
+//         title: "Error",
+//         description: "Could not read or process the PDF file.",
+//         variant: "destructive",
+//       });
+//     } finally {
+//       setIsLoading(false);
+//     }
+//   };
+
+//   const parseTextToStructuredData = (text: string): { headers: string[]; rows: string[][]; records: RawStudentRecord[] } => {
+//     const records: RawStudentRecord[] = [];
+
+//     const studentBlockRegex = /(\d{5})\s*MarksO\s*([\s\S]*?)\s*Grade\s*([\s\S]*?)(?=\d{5}\s*MarksO|$)/g;
+//     const cleanedText = text.replace(/\r/g, '').replace(/\n\s{1,}\n/g, '\n\n');
+
+//     let match;
+//     while ((match = studentBlockRegex.exec(cleanedText)) !== null) {
+//         const seatNo = match[1];
+//         const marksBlock = match[2];
+//         const gradeAndMetadataBlock = match[3];
+
+//         const marksTokens = marksBlock.match(/[\d+\-EF\*\!]+|[\d]+/g) || [];
+//         const subjectMarks = marksTokens.slice(0, EXPECTED_COMPONENT_COUNT);
+//         const totalMarks = marksTokens.length > EXPECTED_COMPONENT_COUNT ? marksTokens[EXPECTED_COMPONENT_COUNT] : 'N/A';
+
+//         const gradeTokens = gradeAndMetadataBlock.match(/[A-Z\-]+/g) || [];
+//         const subjectGrades = gradeTokens.slice(0, EXPECTED_COMPONENT_COUNT);
+
+//         let name = 'N/A';
+//         let sgpa = 'N/A';
+//         let finalResult = 'N/A';
+
+//         let nameStart = 0;
+//         const allGradeMatches = [...gradeAndMetadataBlock.matchAll(/[A-Z\-]+(\+[A-Z])?/g)];
+
+//         if (allGradeMatches.length >= EXPECTED_COMPONENT_COUNT) {
+//              const lastGradeMatch = allGradeMatches[EXPECTED_COMPONENT_COUNT - 1];
+//              if (lastGradeMatch && lastGradeMatch.index !== undefined) {
+//                  nameStart = lastGradeMatch.index + lastGradeMatch[0].length;
+//              }
+//         } else {
+//              nameStart = 0;
+//         }
+
+//         let rawNameSection = gradeAndMetadataBlock.substring(nameStart);
+
+//         const garbageMatch = rawNameSection.match(/(\s+C\s+[\-\d]|\s+GPC\s|\s+GP\s|\s+TOT\s)/);
+//         if (garbageMatch && garbageMatch.index !== undefined) {
+//              rawNameSection = rawNameSection.substring(0, garbageMatch.index);
+//         }
+
+//         name = rawNameSection.trim()
+//             .replace(/[^a-zA-Z\s\.\-']/g, "")
+//             .replace(/\s+/g, " ")
+//             .trim();
+
+//         const sgpaResultBlock = gradeAndMetadataBlock.substring(nameStart);
+//         const sgpaResultMatch = sgpaResultBlock.match(/[\d\.-]+\s+([PF])\s*$/);
+
+//         if (sgpaResultMatch) {
+//             const finalResultLetter = sgpaResultMatch[1];
+//             const sgpaMatch = sgpaResultBlock.match(/([\d\.-]+)\s+([PF])\s*$/);
+//             if (sgpaMatch && sgpaMatch.length > 1) {
+//                 sgpa = sgpaMatch[1];
+//             } else {
+//                 sgpa = 'N/A';
+//             }
+//             finalResult = finalResultLetter;
+//         } else if (sgpaResultBlock.includes('- -   F')) {
+//              sgpa = '- -';
+//              finalResult = 'F';
+//         }
+
+//         const record: RawStudentRecord = {
+//             'Seat No': seatNo,
+//             'Name': name,
+//             'Total Marks': totalMarks,
+//             'SGPA': sgpa,
+//             'Final Result': finalResult,
+//         };
+
+//         subjectMarks.forEach((mark, index) => { record[MARK_HEADERS[index]] = mark; });
+//         subjectGrades.forEach((grade, index) => { record[GRADE_HEADERS[index]] = grade; });
+
+//         if (subjectMarks.length > 0) {
+//              records.push(record);
+//         }
+//     }
+
+//     const rows = records.map(record => {
+//         return FINAL_HEADERS.map(header => record[header] || 'N/A');
+//     });
+
+//     return { headers: FINAL_HEADERS, rows, records };
+//   };
+
+//   const onDownloadCsv = () => {
+//     if (!extractedText) {
+//       toast({ title: "No Data", description: "Please upload a PDF file first.", variant: "destructive" });
+//       return;
+//     }
+//     const { headers, rows } = parseTextToStructuredData(extractedText);
+//     if (rows.length === 0) {
+//       toast({ title: "No Data", description: "Could not extract structured data from PDF.", variant: "destructive" });
+//       return;
+//     }
+//     const escapeCell = (cell: string) => {
+//       if (cell.includes(",") || cell.includes('"') || cell.includes("\n")) {
+//         return `"${cell.replace(/"/g, '""')}"`;
+//       }
+//       return cell;
+//     };
+//     const csvLines = [headers.map(escapeCell).join(","), ...rows.map(row => row.map(escapeCell).join(","))];
+//     const csv = csvLines.join("\n");
+//     download("converted-result-sheet.csv", csv, "text/csv;charset=utf-8;");
+//     toast({ title: "Downloaded!", description: `CSV file with ${headers.length} columns and ${rows.length} student records downloaded.` });
+//   };
+
+//   const hasData = extractedText.length > 0;
+
+//   // --- NEW: UPLOAD TO DATABASE FUNCTION (WITH ATKT) ---
+//   const uploadToBackend = async () => {
+//     if (!extractedText) {
+//       toast({ title: "No Data", description: "Please upload a PDF file first.", variant: "destructive" });
+//       return;
+//     }
+//     const { headers, rows } = parseTextToStructuredData(extractedText);
+//     if (rows.length === 0) {
+//       toast({ title: "No Data", description: "Could not extract structured data from PDF.", variant: "destructive" });
+//       return;
+//     }
+//     const escapeCell = (cell: string) => {
+//       if (cell.includes(",") || cell.includes('"') || cell.includes("\n")) {
+//         return `"${cell.replace(/"/g, '""')}"`;
+//       }
+//       return cell;
+//     };
+//     const csvLines = [headers.map(escapeCell).join(","), ...rows.map(row => row.map(escapeCell).join(","))];
+//     const csv = csvLines.join("\n");
+//     const blob = new Blob([csv], { type: "text/csv" });
+//     const file = new File([blob], "data.csv", { type: "text/csv" });
+
+//     const formData = new FormData();
+//     formData.append("file", file);
+//     formData.append("semester", semester);
+
+//     setIsUploading(true);
+//     try {
+//       const endpoint = isATKT
+//           ? "http://localhost:5000/api/students/upload-atkt-csv"
+//           : "http://localhost:5000/api/students/upload-csv";
+
+//       const res = await fetch(endpoint, { method: "POST", body: formData });
+//       const json = await res.json();
+
+//       if (res.ok) {
+//         toast({ title: "Success", description: "Data stored in Database! You can now view analysis." });
+//       } else {
+//         toast({ title: "Upload Failed", description: json.message || json.error || "Unknown error occurred", variant: "destructive" });
+//       }
+//     } catch (err) {
+//       console.error(err);
+//       toast({ title: "Connection Error", description: "Is the backend server running on port 5000?", variant: "destructive" });
+//     } finally {
+//       setIsUploading(false);
+//     }
+//   };
+
+//   return (
+//     <div className="w-full space-y-6">
+//       <Card className={`p-6 space-y-6 transition-all duration-300 ${isATKT ? 'border-2 border-orange-300' : ''}`}>
+//         <div className="space-y-2">
+//           <h2 className={`text-xl font-semibold ${isATKT ? 'text-orange-700' : ''}`}>{title} {isATKT && "(ATKT Mode)"}</h2>
+//           <p className="text-sm text-muted-foreground">{description}</p>
+//         </div>
+
+//         <div className="space-y-4">
+//           <div className="space-y-2">
+//             <label className="text-sm font-medium flex items-center gap-2">
+//               <Upload className="w-4 h-4" />
+//               Upload PDF File
+//             </label>
+//             <Input
+//               type="file"
+//               accept=".pdf"
+//               onChange={(e) => handleFile(e.target.files?.[0] || null)}
+//               disabled={isLoading}
+//               onClick={(e) => (e.currentTarget.value = "")}
+//               className={isATKT ? "bg-orange-50" : ""}
+//             />
+//           </div>
+//         </div>
+
+//         <Button variant="default" className="w-full" onClick={onDownloadCsv} disabled={!hasData || isLoading}>
+//             <FileSpreadsheet className="w-4 h-4 mr-2" />
+//             {isLoading ? "Processing..." : "Download CSV"}
+//         </Button>
+
+//         {/* --- ADDED ATKT CHECKBOX --- */}
+//         <div className="pt-4 border-t space-y-4">
+//           <div className="flex items-center space-x-2 bg-gray-50 p-3 rounded-lg border border-gray-200">
+//             <input
+//               type="checkbox" id={`isAtkt${semester}`}
+//               checked={isATKT} onChange={(e) => setIsATKT(e.target.checked)}
+//               className="w-5 h-5 text-indigo-600 rounded cursor-pointer"
+//             />
+//             <label htmlFor={`isAtkt${semester}`} className="text-sm font-bold text-gray-700 cursor-pointer select-none">
+//               This is an ATKT Result (Smartly updates existing records)
+//             </label>
+//           </div>
+
+//           <Button
+//             className={`w-full mt-2 ${isATKT ? 'bg-orange-600 hover:bg-orange-700' : 'bg-green-600 hover:bg-green-700'}`}
+//             onClick={uploadToBackend} disabled={!hasData || isLoading || isUploading}
+//           >
+//             <Database className="w-4 h-4 mr-2" />
+//             {isUploading ? "Uploading..." : `Upload ${isATKT ? 'ATKT' : 'CSV'} to DB`}
+//           </Button>
+//         </div>
+
+//         {hasData && (
+//           <div className="pt-4 border-t">
+//             <p className="text-sm text-muted-foreground">
+//               {studentRecords.length} student records extracted.
+//             </p>
+//           </div>
+//         )}
+//       </Card>
+
+//       {analysisData && Object.keys(analysisData).length > 0 && (
+//         <Card className="p-6 space-y-4">
+//             <div className="flex items-center gap-2">
+//                 <BarChart3 className="w-5 h-5" />
+//                 <h3 className="text-lg font-semibold">Semester {semester} Result Analysis</h3>
+//             </div>
+//             <SubjectAnalysisReport analysisData={analysisData} />
+//         </Card>
+//       )}
+//     </div>
+//   );
+// };
+
+// export default Sem5Converter;
+
+import React, { useState } from "react";
+import Papa from "papaparse";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -7,22 +485,25 @@ import { useToast } from "@/hooks/use-toast";
 import { FileSpreadsheet, Upload, BarChart3, Database } from "lucide-react";
 import SubjectAnalysisReport from "./SubjectAnalysisReport";
 
-const SUBJECT_RULES: { name: string; components: string[]; shortName: string }[] = [
-   { name: "INTERNET PROGRAMMING", components: ["ESE", "IA", "TOT"], shortName: "IP" },
-    { name: "COMPUTER NETWORK SECURITY", components: ["ESE", "IA", "TOT"], shortName: "CNS" },
-    { name: "ENTREPRENEURSHIP AND E-BUSINESS", components: ["ESE", "IA", "TOT"], shortName: "EEB" },
-    { name: "SOFTWARE ENGINEERING ", components: ["ESE", "IA", "TOT"], shortName: "SE" },
-    { name: "DEPARTMENT OPTIONAL SUBJECT", components: ["ESE", "IA", "TOT"], shortName: "ADSA" }, 
-    { name: "IP LAB", components: ["PR OR", "TW", "TOT"], shortName: "IP LAB" },
-    { name: "SECURITY LAB", components: ["PR OR", "TW", "TOT"], shortName: "SECURITY LAB" },
-    { name: "DevOPs LAB", components: ["PR OR", "TW", "TOT"], shortName: "DevOPs LAB" },
-    { name: "ADVANCE DevOPs LAB", components: ["PR OR", "TW", "TOT"], shortName: "ADV DevOPs LAB" },
-    { name: "PROFESSIONAL COMMUNICATION AND ETHICS - II (PCE-II)", components: ["PR OR", "TW", "TOT"], shortName: "PCE-II"},
-    { name: "MINI PROJECT - 2 A WEB BASED BUSINESS MODEL ", components: ["PR OR", "TW", "TOT"], shortName: "MINI PROJECT 2A" }
-];
+// --- 1. Dynamic Dictionary Mapping ---
+// Maps long CSV names to shorter headers. Any unknown elective will auto-fallback to its first 15 letters.
+const SHORT_NAMES: Record<string, string> = {
+  "INTERNET PROGRAMMING": "IP",
+  "COMPUTER NETWORK SECURITY": "CNS",
+  "ENTREPRENEURSHIP AND E-BUSINESS": "EEB",
+  "SOFTWARE ENGINEERING": "SE",
+  "ADVANCE DATA MANAGEMENT TECHNOLOGIES": "ADMT",
+  "ADVANCED DATA STRUCTURE AND ANALYSIS": "ADSA",
+  "IP LAB": "IP LAB",
+  "SECURITY LAB": "SEC LAB",
+  "DEVOPS LAB": "DEVOPS LAB",
+  "ADVANCE DEVOPS LAB": "ADV DEVOPS LAB",
+  "PROFESSIONAL COMMUNICATION AND ETHICS - II (PCE-II)": "PCE II",
+  "MINI PROJECT - 2 A WEB BASED BUSINESS MODEL": "MINI PROJ 2A",
+  "MINI PROJECT - 2A WEB BASED BUSINESS MODEL": "MINI PROJ 2A",
+};
 
-const EXPECTED_COMPONENT_COUNT = 33;
-
+// --- Helper Data Structures for Analysis ---
 interface SubjectStats {
   totalAppeared: number;
   totalPassed: number;
@@ -37,47 +518,22 @@ interface AnalysisData {
   [subjectName: string]: SubjectStats;
 }
 
-const MARK_HEADERS: string[] = [];
-const GRADE_HEADERS: string[] = [];
-const TOT_INDICES: { subjectName: string; markIndex: number; gradeIndex: number }[] = [];
-let currentIndex = 0;
-
-SUBJECT_RULES.forEach(sub => {
-    sub.components.forEach((comp, compIndex) => {
-        const fullMarkHeader = `${sub.shortName} - ${comp} (Marks)`;
-        const fullGradeHeader = `${sub.shortName} - ${comp} (Grade)`;
-        
-        MARK_HEADERS.push(fullMarkHeader);
-        GRADE_HEADERS.push(fullGradeHeader);
-
-        if (comp === 'TOT') {
-            TOT_INDICES.push({
-                subjectName: sub.name,
-                markIndex: currentIndex,
-                gradeIndex: currentIndex, 
-            });
-        }
-        currentIndex++;
-    });
-});
-
-const FINAL_HEADERS: string[] = [
-    "Seat No",
-    "Name",
-    ...MARK_HEADERS,
-    ...GRADE_HEADERS,
-    "Total Marks",
-    "SGPA",
-    "Final Result",
-];
-
 interface RawStudentRecord {
-    'Seat No': string;
-    'Name': string;
-    'Total Marks': string;
-    'SGPA': string;
-    'Final Result': string;
-    [key: string]: string;
+  "Seat No": string;
+  Name: string;
+  "Total Marks": string;
+  SGPA: string;
+  "Final Result": string;
+  [key: string]: string;
+}
+
+interface ParsedData {
+  headers: string[];
+  rows: string[][];
+  records: RawStudentRecord[];
+  totIndices: any[];
+  markHeaders: string[];
+  gradeHeaders: string[];
 }
 
 const download = (filename: string, content: string, mimeType: string) => {
@@ -90,150 +546,400 @@ const download = (filename: string, content: string, mimeType: string) => {
   URL.revokeObjectURL(url);
 };
 
-const analyzeStudentRecords = (records: RawStudentRecord[]): AnalysisData => {
-    const initialStats: AnalysisData = {};
+// --- 2. Dynamic Result Analysis Function ---
+const analyzeStudentRecords = (
+  records: RawStudentRecord[],
+  totIndices: any[],
+  markHeaders: string[],
+  gradeHeaders: string[],
+): AnalysisData => {
+  const initialStats: AnalysisData = {};
 
-    TOT_INDICES.forEach(item => {
-        initialStats[item.subjectName] = {
-            totalAppeared: 0,
-            totalPassed: 0,
-            passPercentage: "0.00%",
-            marks40_50: 0,
-            marks51_59: 0,
-            marks60_Above: 0,
-            teacher: "N/A (Provide Teacher Data Separately)",
-        };
-    });
+  totIndices.forEach((item) => {
+    initialStats[item.subjectName] = {
+      totalAppeared: 0,
+      totalPassed: 0,
+      passPercentage: "0.00%",
+      marks40_50: 0,
+      marks51_59: 0,
+      marks60_Above: 0,
+      teacher: "N/A",
+    };
+  });
 
-    records.forEach(record => {
-        TOT_INDICES.forEach(item => {
-            const subjectStats = initialStats[item.subjectName];
-            if (!subjectStats) return;
+  records.forEach((record) => {
+    totIndices.forEach((item) => {
+      const subjectStats = initialStats[item.subjectName];
+      if (!subjectStats) return;
 
-            const markHeader = MARK_HEADERS[item.markIndex];
-            const gradeHeader = GRADE_HEADERS[item.gradeIndex];
-            
-            const totMarkStr = record[markHeader];
-            const totGrade = record[gradeHeader];
+      const markHeader = markHeaders[item.markIndex];
+      if (record[markHeader] === undefined) return;
 
-            const totMarkNum = parseInt(totMarkStr.replace(/\+/g, '').trim(), 10);
-            
-            const isPassed = !isNaN(totMarkNum) && totGrade !== 'F';
+      subjectStats.totalAppeared++;
 
-            if (isPassed) {
-                subjectStats.totalPassed++;
-                if (totMarkNum >= 60) {
-                    subjectStats.marks60_Above++;
-                } else if (totMarkNum >= 51 && totMarkNum <= 59) {
-                    subjectStats.marks51_59++;
-                } else if (totMarkNum >= 40 && totMarkNum <= 50) {
-                    subjectStats.marks40_50++;
-                }
-            }
-        });
-    });
+      const gradeHeader = gradeHeaders[item.gradeIndex];
+      const totMarkStr = record[markHeader] || "0";
+      const totGrade = record[gradeHeader] || "F";
 
-    Object.keys(initialStats).forEach(subjectName => {
-        const stats = initialStats[subjectName];
-        if (stats.totalAppeared > 0) {
-            const percentage = (stats.totalPassed / stats.totalAppeared) * 100;
-            stats.passPercentage = percentage.toFixed(2) + "%";
+      const totMarkNum = parseInt(totMarkStr.replace(/\+/g, "").trim(), 10);
+      const isPassed = !isNaN(totMarkNum) && totGrade !== "F";
+
+      if (isPassed) {
+        subjectStats.totalPassed++;
+        if (totMarkNum >= 60) {
+          subjectStats.marks60_Above++;
+        } else if (totMarkNum >= 51 && totMarkNum <= 59) {
+          subjectStats.marks51_59++;
+        } else if (totMarkNum >= 40 && totMarkNum <= 50) {
+          subjectStats.marks40_50++;
         }
+      }
     });
+  });
 
-    return initialStats;
+  Object.keys(initialStats).forEach((subjectName) => {
+    const stats = initialStats[subjectName];
+    if (stats.totalAppeared > 0) {
+      const percentage = (stats.totalPassed / stats.totalAppeared) * 100;
+      stats.passPercentage = percentage.toFixed(2) + "%";
+    }
+  });
+
+  return initialStats;
 };
 
-interface SimplePdfConverterProps {
+interface SimpleCsvConverterProps {
   title: string;
   description: string;
 }
 
-export const Sem5Converter: React.FC<SimplePdfConverterProps> = ({
+export const Sem5Converter: React.FC<SimpleCsvConverterProps> = ({
   title,
   description,
 }) => {
   const { toast } = useToast();
-  const [extractedText, setExtractedText] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [analysisData, setAnalysisData] = useState<AnalysisData | null>(null);
+
+  // Dynamic parsing state
   const [studentRecords, setStudentRecords] = useState<RawStudentRecord[]>([]);
+  const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
+  const [parsedTotIndices, setParsedTotIndices] = useState<any[]>([]);
+  const [parsedMarkHeaders, setParsedMarkHeaders] = useState<string[]>([]);
+  const [parsedGradeHeaders, setParsedGradeHeaders] = useState<string[]>([]);
 
-  // --- NEW ATKT STATE ---
-  const semester = "5";
-  const [isATKT, setIsATKT] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
-  // ----------------------
-
-  useMemo(() => {
-    pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.mjs`;
-  }, []);
-
-  const handleFile = async (file?: File | null) => {
+  const handleFile = (file?: File | null) => {
     if (!file) return;
-    if (file.type !== "application/pdf") {
-      toast({ title: "Invalid File Type", description: "Please upload a PDF file.", variant: "destructive" });
+    if (!file.name.toLowerCase().endsWith(".csv")) {
+      toast({
+        title: "Invalid File Type",
+        description: "Please upload the exported CSV file.",
+        variant: "destructive",
+      });
       return;
     }
 
     setIsLoading(true);
-    setExtractedText("");
-    setAnalysisData(null); 
-    setStudentRecords([]); 
+    setAnalysisData(null);
+    setStudentRecords([]);
 
-    try {
-      toast({ title: "Extracting data from PDF..." });
-      const arrayBuffer = await file.arrayBuffer();
-      const pdf = await pdfjs.getDocument(arrayBuffer).promise;
-      
-      let fullText = "";
-      for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const textContent = await page.getTextContent();
-        const textItems = textContent.items.filter(
-          (item) => "str" in item
-        ) as any[];
-        
-        textItems.sort((a, b) => {
-          if (Math.abs(a.transform[5] - b.transform[5]) > 5)
-            return b.transform[5] - a.transform[5];
-          return a.transform[4] - b.transform[4];
-        });
-        
-        let pageText = "";
-        let lastItem: any = null;
-        for (const item of textItems) {
-          if (lastItem) {
-            if (Math.abs(item.transform[5] - lastItem.transform[5]) > 5) {
-              pageText += "\n";
-            } else {
-              const lastItemEndX = lastItem.transform[4] + lastItem.width;
-              if (item.transform[4] > lastItemEndX + 1) {
-                pageText += "\t";
-              }
-            }
+    Papa.parse(file, {
+      complete: (results) => {
+        try {
+          const parsed = parseCsvToStructuredData(results.data as any[][]);
+          if (parsed.records.length === 0) {
+            toast({
+              title: "Error",
+              description: "No valid student data found in the CSV.",
+              variant: "destructive",
+            });
+          } else {
+            setCsvHeaders(parsed.headers);
+            setParsedTotIndices(parsed.totIndices);
+            setParsedMarkHeaders(parsed.markHeaders);
+            setParsedGradeHeaders(parsed.gradeHeaders);
+            setStudentRecords(parsed.records);
+            toast({
+              title: "CSV Parsed",
+              description:
+                "Preview loaded. Click 'Upload to Database' to analyze.",
+            });
           }
-          pageText += item.str;
-          lastItem = item;
+        } catch (error: any) {
+          console.error(error);
+          toast({
+            title: "Parse Error",
+            description: error.message || "Failed to map CSV structure.",
+            variant: "destructive",
+          });
+        } finally {
+          setIsLoading(false);
         }
-        fullText += pageText + "\n\n";
+      },
+      error: (error) => {
+        toast({
+          title: "File Read Error",
+          description: error.message,
+          variant: "destructive",
+        });
+        setIsLoading(false);
+      },
+    });
+  };
+
+  const parseCsvToStructuredData = (data: any[][]): ParsedData => {
+    const records: RawStudentRecord[] = [];
+    let dynamicHeaders: string[] = [];
+    let totIndices: any[] = [];
+    let markHeaders: string[] = [];
+    let gradeHeaders: string[] = [];
+    let extractedSubjects: string[] = [];
+
+    // 1. Detect dynamic subjects
+    for (let i = 0; i < Math.min(20, data.length); i++) {
+      const rowStr = data[i].join(",").toUpperCase();
+      if (rowStr.includes("INTERNET PROGRAMMING")) {
+        extractedSubjects = data[i]
+          .map((s: any) => (s ? s.toString().trim() : ""))
+          .filter(
+            (s: string) =>
+              s !== "" &&
+              ![
+                "COURSES →",
+                "TOTAL",
+                "SGPI (GPA)",
+                "RESULT",
+                "CGPI",
+                "RLE",
+              ].includes(s.toUpperCase()),
+          );
+
+        let currentIndex = 0;
+        extractedSubjects.forEach((subName, idx) => {
+          const upperSub = subName.toUpperCase();
+          // Fallback to substring if subject is not in mapping
+          const shortName = SHORT_NAMES[upperSub] || upperSub.substring(0, 15);
+
+          // First 5 subjects are theory, remaining are labs in sem 5
+          const components =
+            idx < 5 ? ["ESE", "IA", "TOT"] : ["PR OR", "TW", "TOT"];
+
+          components.forEach((comp) => {
+            const safeShortName = shortName
+              .replace(/[^a-zA-Z0-9]/g, "_")
+              .replace(/_+/g, "_");
+            const markHead = `${safeShortName}_${comp}_Marks`;
+            const gradeHead = `${safeShortName}_${comp}_Grade`;
+
+            markHeaders.push(markHead);
+            gradeHeaders.push(gradeHead);
+
+            if (comp === "TOT") {
+              totIndices.push({
+                subjectName: subName,
+                markIndex: currentIndex,
+                gradeIndex: currentIndex,
+              });
+            }
+            currentIndex++;
+          });
+        });
+
+        dynamicHeaders = [
+          "Seat No",
+          "Name",
+          ...markHeaders,
+          ...gradeHeaders,
+          "Total Marks",
+          "SGPA",
+          "Final Result",
+        ];
+        break;
+      }
+    }
+
+    if (dynamicHeaders.length === 0) {
+      throw new Error(
+        "Could not detect subjects row. Ensure file contains standard headers like 'INTERNET PROGRAMMING'.",
+      );
+    }
+
+    // 2. Parse Students
+    for (let i = 0; i < data.length; i++) {
+      const row = data[i];
+      if (!row || !row[0]) continue;
+
+      const firstCell = row[0].toString().trim();
+
+      // Match pattern like "55045.0" or "55045"
+      if (/^\d{5,}(\.0)?$/.test(firstCell)) {
+        const seatNo = firstCell.replace(".0", "");
+        const nameRow = data[i + 1] || [];
+        const name = nameRow[0] ? nameRow[0].toString().trim() : "Unknown";
+
+        const record: RawStudentRecord = {
+          "Seat No": seatNo,
+          Name: name,
+          "Total Marks": row[35] ? row[35].toString().trim() : "N/A",
+          SGPA: row[36] ? row[36].toString().trim() : "N/A",
+          "Final Result": row[37] ? row[37].toString().trim() : "N/A",
+        };
+
+        let colIdx = 2; // Column where marks start
+        extractedSubjects.forEach((subName, subIdx) => {
+          const components =
+            subIdx < 5 ? ["ESE", "IA", "TOT"] : ["PR OR", "TW", "TOT"];
+          const upperSub = subName.toUpperCase();
+          const shortName = SHORT_NAMES[upperSub] || upperSub.substring(0, 15);
+
+          components.forEach((comp) => {
+            const safeShortName = shortName
+              .replace(/[^a-zA-Z0-9]/g, "_")
+              .replace(/_+/g, "_");
+            const markHead = `${safeShortName}_${comp}_Marks`;
+            const gradeHead = `${safeShortName}_${comp}_Grade`;
+
+            // Strip E/F/!/* metadata from numerical marks
+            record[markHead] =
+              row[colIdx] !== undefined
+                ? row[colIdx]
+                    .toString()
+                    .trim()
+                    .replace(/[EF\*\!]/g, "")
+                : "";
+            record[gradeHead] =
+              nameRow[colIdx] !== undefined
+                ? nameRow[colIdx].toString().trim()
+                : "";
+            colIdx++;
+          });
+        });
+
+        records.push(record);
+      }
+    }
+
+    const rows = records.map((record) =>
+      dynamicHeaders.map((header) => record[header] || "N/A"),
+    );
+    return {
+      headers: dynamicHeaders,
+      rows,
+      records,
+      totIndices,
+      markHeaders,
+      gradeHeaders,
+    };
+  };
+
+  const generateCsvContent = () => {
+    const escapeCell = (cell: string) => {
+      const strCell = String(cell);
+      return strCell.includes(",") ||
+        strCell.includes('"') ||
+        strCell.includes("\n")
+        ? `"${strCell.replace(/"/g, '""')}"`
+        : strCell;
+    };
+    const rows = studentRecords.map((record) =>
+      csvHeaders.map((header) => record[header] || "N/A"),
+    );
+    return [
+      csvHeaders.map(escapeCell).join(","),
+      ...rows.map((row) => row.map(escapeCell).join(",")),
+    ].join("\n");
+  };
+
+  const onDownloadCsv = () => {
+    if (studentRecords.length === 0 || csvHeaders.length === 0) return;
+    const csvContent = generateCsvContent();
+    download(
+      "converted-sem5-result.csv",
+      csvContent,
+      "text/csv;charset=utf-8;",
+    );
+    toast({
+      title: "Downloaded!",
+      description: "Dynamic CSV file has been saved.",
+    });
+  };
+
+  const uploadToBackend = async () => {
+    if (studentRecords.length === 0 || csvHeaders.length === 0) {
+      toast({
+        title: "No Data",
+        description: "Please upload and parse a file first.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const csvContent = generateCsvContent();
+    const blob = new Blob([csvContent], { type: "text/csv" });
+    const file = new File([blob], "sem5_data.csv", { type: "text/csv" });
+
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("semester", "5");
+
+    setIsLoading(true);
+    try {
+      toast({
+        title: "Uploading...",
+        description: "Sending data to database.",
+      });
+      const res = await fetch(
+        "http://localhost:5000/api/students/upload-csv-sem5",
+        {
+          method: "POST",
+          body: formData,
+        },
+      );
+      const json = await res.json();
+
+      if (!res.ok) {
+        throw new Error(json.message || "Upload failed");
       }
 
-      setExtractedText(fullText);
-      
-      const { records } = parseTextToStructuredData(fullText);
-      setStudentRecords(records);
-      
       toast({
-        title: "Success!",
-        description: `PDF data extracted and ${records.length} records analyzed.`,
+        title: "Success",
+        description: "Data uploaded. Fetching for analysis...",
       });
-      
-    } catch (error) {
-      console.error("Failed to process PDF:", error);
+
+      const fetchRes = await fetch(
+        "http://localhost:5000/api/students?semester=5",
+      );
+      if (!fetchRes.ok) throw new Error("Failed to fetch data from DB");
+
+      const dbStudents = await fetchRes.json();
+
+      if (dbStudents.length === 0) {
+        toast({
+          title: "Warning",
+          description: "Database is empty for Semester 5.",
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      const recordsFromDB = dbStudents.map((s: any) => s.subjects);
+      const analysis = analyzeStudentRecords(
+        recordsFromDB,
+        parsedTotIndices,
+        parsedMarkHeaders,
+        parsedGradeHeaders,
+      );
+      setAnalysisData(analysis);
+
+      toast({
+        title: "Analysis Ready",
+        description: "Charts generated from verified Database data.",
+      });
+    } catch (err: any) {
+      console.error(err);
       toast({
         title: "Error",
-        description: "Could not read or process the PDF file.",
+        description: err.message || "Connection Error",
         variant: "destructive",
       });
     } finally {
@@ -241,233 +947,64 @@ export const Sem5Converter: React.FC<SimplePdfConverterProps> = ({
     }
   };
 
-  const parseTextToStructuredData = (text: string): { headers: string[]; rows: string[][]; records: RawStudentRecord[] } => {
-    const records: RawStudentRecord[] = [];
-    
-    const studentBlockRegex = /(\d{5})\s*MarksO\s*([\s\S]*?)\s*Grade\s*([\s\S]*?)(?=\d{5}\s*MarksO|$)/g;
-    const cleanedText = text.replace(/\r/g, '').replace(/\n\s{1,}\n/g, '\n\n'); 
-
-    let match;
-    while ((match = studentBlockRegex.exec(cleanedText)) !== null) {
-        const seatNo = match[1];
-        const marksBlock = match[2];
-        const gradeAndMetadataBlock = match[3];
-
-        const marksTokens = marksBlock.match(/[\d+\-EF\*\!]+|[\d]+/g) || [];
-        const subjectMarks = marksTokens.slice(0, EXPECTED_COMPONENT_COUNT);
-        const totalMarks = marksTokens.length > EXPECTED_COMPONENT_COUNT ? marksTokens[EXPECTED_COMPONENT_COUNT] : 'N/A';
-        
-        const gradeTokens = gradeAndMetadataBlock.match(/[A-Z\-]+/g) || [];
-        const subjectGrades = gradeTokens.slice(0, EXPECTED_COMPONENT_COUNT);
-        
-        let name = 'N/A';
-        let sgpa = 'N/A';
-        let finalResult = 'N/A';
-        
-        let nameStart = 0;
-        const allGradeMatches = [...gradeAndMetadataBlock.matchAll(/[A-Z\-]+(\+[A-Z])?/g)];
-        
-        if (allGradeMatches.length >= EXPECTED_COMPONENT_COUNT) {
-             const lastGradeMatch = allGradeMatches[EXPECTED_COMPONENT_COUNT - 1];
-             if (lastGradeMatch && lastGradeMatch.index !== undefined) {
-                 nameStart = lastGradeMatch.index + lastGradeMatch[0].length;
-             }
-        } else {
-             nameStart = 0;
-        }
-
-        let rawNameSection = gradeAndMetadataBlock.substring(nameStart);
-
-        const garbageMatch = rawNameSection.match(/(\s+C\s+[\-\d]|\s+GPC\s|\s+GP\s|\s+TOT\s)/);
-        if (garbageMatch && garbageMatch.index !== undefined) {
-             rawNameSection = rawNameSection.substring(0, garbageMatch.index);
-        }
-
-        name = rawNameSection.trim()
-            .replace(/[^a-zA-Z\s\.\-']/g, "")
-            .replace(/\s+/g, " ")
-            .trim();
-
-        const sgpaResultBlock = gradeAndMetadataBlock.substring(nameStart); 
-        const sgpaResultMatch = sgpaResultBlock.match(/[\d\.-]+\s+([PF])\s*$/);
-        
-        if (sgpaResultMatch) {
-            const finalResultLetter = sgpaResultMatch[1];
-            const sgpaMatch = sgpaResultBlock.match(/([\d\.-]+)\s+([PF])\s*$/);
-            if (sgpaMatch && sgpaMatch.length > 1) {
-                sgpa = sgpaMatch[1];
-            } else {
-                sgpa = 'N/A';
-            }
-            finalResult = finalResultLetter;
-        } else if (sgpaResultBlock.includes('- -   F')) {
-             sgpa = '- -';
-             finalResult = 'F';
-        }
-
-        const record: RawStudentRecord = {
-            'Seat No': seatNo,
-            'Name': name,
-            'Total Marks': totalMarks,
-            'SGPA': sgpa,
-            'Final Result': finalResult,
-        };
-
-        subjectMarks.forEach((mark, index) => { record[MARK_HEADERS[index]] = mark; });
-        subjectGrades.forEach((grade, index) => { record[GRADE_HEADERS[index]] = grade; });
-
-        if (subjectMarks.length > 0) {
-             records.push(record);
-        }
-    }
-    
-    const rows = records.map(record => {
-        return FINAL_HEADERS.map(header => record[header] || 'N/A');
-    });
-
-    return { headers: FINAL_HEADERS, rows, records };
-  };
-
-  const onDownloadCsv = () => {
-    if (!extractedText) {
-      toast({ title: "No Data", description: "Please upload a PDF file first.", variant: "destructive" });
-      return;
-    }
-    const { headers, rows } = parseTextToStructuredData(extractedText);
-    if (rows.length === 0) {
-      toast({ title: "No Data", description: "Could not extract structured data from PDF.", variant: "destructive" });
-      return;
-    }
-    const escapeCell = (cell: string) => {
-      if (cell.includes(",") || cell.includes('"') || cell.includes("\n")) {
-        return `"${cell.replace(/"/g, '""')}"`;
-      }
-      return cell;
-    };
-    const csvLines = [headers.map(escapeCell).join(","), ...rows.map(row => row.map(escapeCell).join(","))];
-    const csv = csvLines.join("\n");
-    download("converted-result-sheet.csv", csv, "text/csv;charset=utf-8;");
-    toast({ title: "Downloaded!", description: `CSV file with ${headers.length} columns and ${rows.length} student records downloaded.` });
-  };
-
-  const hasData = extractedText.length > 0;
-
-  // --- NEW: UPLOAD TO DATABASE FUNCTION (WITH ATKT) ---
-  const uploadToBackend = async () => {
-    if (!extractedText) {
-      toast({ title: "No Data", description: "Please upload a PDF file first.", variant: "destructive" });
-      return;
-    }
-    const { headers, rows } = parseTextToStructuredData(extractedText);
-    if (rows.length === 0) {
-      toast({ title: "No Data", description: "Could not extract structured data from PDF.", variant: "destructive" });
-      return;
-    }
-    const escapeCell = (cell: string) => {
-      if (cell.includes(",") || cell.includes('"') || cell.includes("\n")) {
-        return `"${cell.replace(/"/g, '""')}"`;
-      }
-      return cell;
-    };
-    const csvLines = [headers.map(escapeCell).join(","), ...rows.map(row => row.map(escapeCell).join(","))];
-    const csv = csvLines.join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const file = new File([blob], "data.csv", { type: "text/csv" });
-
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("semester", semester); 
-
-    setIsUploading(true);
-    try {
-      const endpoint = isATKT 
-          ? "http://localhost:5000/api/students/upload-atkt-csv" 
-          : "http://localhost:5000/api/students/upload-csv";
-
-      const res = await fetch(endpoint, { method: "POST", body: formData });
-      const json = await res.json();
-      
-      if (res.ok) {
-        toast({ title: "Success", description: "Data stored in Database! You can now view analysis." });
-      } else {
-        toast({ title: "Upload Failed", description: json.message || json.error || "Unknown error occurred", variant: "destructive" });
-      }
-    } catch (err) {
-      console.error(err);
-      toast({ title: "Connection Error", description: "Is the backend server running on port 5000?", variant: "destructive" });
-    } finally {
-      setIsUploading(false);
-    }
-  };
+  const hasData = studentRecords.length > 0;
 
   return (
     <div className="w-full space-y-6">
-      <Card className={`p-6 space-y-6 transition-all duration-300 ${isATKT ? 'border-2 border-orange-300' : ''}`}>
+      <Card className="p-6 space-y-6">
         <div className="space-y-2">
-          <h2 className={`text-xl font-semibold ${isATKT ? 'text-orange-700' : ''}`}>{title} {isATKT && "(ATKT Mode)"}</h2>
+          <h2 className="text-xl font-semibold">{title}</h2>
           <p className="text-sm text-muted-foreground">{description}</p>
         </div>
-        
         <div className="space-y-4">
           <div className="space-y-2">
             <label className="text-sm font-medium flex items-center gap-2">
-              <Upload className="w-4 h-4" />
-              Upload PDF File
+              <Upload className="w-4 h-4" /> Upload Excel/CSV File
             </label>
             <Input
               type="file"
-              accept=".pdf"
+              accept=".csv"
               onChange={(e) => handleFile(e.target.files?.[0] || null)}
               disabled={isLoading}
               onClick={(e) => (e.currentTarget.value = "")}
-              className={isATKT ? "bg-orange-50" : ""}
             />
           </div>
-        </div>
-        
-        <Button variant="default" className="w-full" onClick={onDownloadCsv} disabled={!hasData || isLoading}>
-            <FileSpreadsheet className="w-4 h-4 mr-2" />
-            {isLoading ? "Processing..." : "Download CSV"}
-        </Button>
-
-        {/* --- ADDED ATKT CHECKBOX --- */}
-        <div className="pt-4 border-t space-y-4">
-          <div className="flex items-center space-x-2 bg-gray-50 p-3 rounded-lg border border-gray-200">
-            <input 
-              type="checkbox" id={`isAtkt${semester}`} 
-              checked={isATKT} onChange={(e) => setIsATKT(e.target.checked)} 
-              className="w-5 h-5 text-indigo-600 rounded cursor-pointer"
-            />
-            <label htmlFor={`isAtkt${semester}`} className="text-sm font-bold text-gray-700 cursor-pointer select-none">
-              This is an ATKT Result (Smartly updates existing records)
-            </label>
-          </div>
-
-          <Button 
-            className={`w-full mt-2 ${isATKT ? 'bg-orange-600 hover:bg-orange-700' : 'bg-green-600 hover:bg-green-700'}`} 
-            onClick={uploadToBackend} disabled={!hasData || isLoading || isUploading}
+          <Button
+            variant="default"
+            className="w-full"
+            onClick={onDownloadCsv}
+            disabled={!hasData || isLoading}
           >
-            <Database className="w-4 h-4 mr-2" />
-            {isUploading ? "Uploading..." : `Upload ${isATKT ? 'ATKT' : 'CSV'} to DB`}
+            <FileSpreadsheet className="w-4 h-4 mr-2" />{" "}
+            {isLoading ? "Processing..." : "Download Clean CSV"}
+          </Button>
+          <Button
+            variant="secondary"
+            className="w-full mt-2"
+            onClick={uploadToBackend}
+            disabled={!hasData || isLoading}
+          >
+            <Database className="w-4 h-4 mr-2" /> Upload to Database & Analyze
           </Button>
         </div>
-
         {hasData && (
           <div className="pt-4 border-t">
             <p className="text-sm text-muted-foreground">
-              {studentRecords.length} student records extracted.
+              {studentRecords.length} student records ready to process.
             </p>
           </div>
         )}
       </Card>
-      
+
       {analysisData && Object.keys(analysisData).length > 0 && (
         <Card className="p-6 space-y-4">
-            <div className="flex items-center gap-2">
-                <BarChart3 className="w-5 h-5" />
-                <h3 className="text-lg font-semibold">Semester {semester} Result Analysis</h3>
-            </div>
-            <SubjectAnalysisReport analysisData={analysisData} />
+          <div className="flex items-center gap-2">
+            <BarChart3 className="w-5 h-5" />
+            <h3 className="text-lg font-semibold">
+              Result Analysis (From Database)
+            </h3>
+          </div>
+          <SubjectAnalysisReport analysisData={analysisData} />
         </Card>
       )}
     </div>

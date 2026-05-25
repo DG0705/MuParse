@@ -34,6 +34,7 @@ import Sem1BlockConverter from "./components/Sem1BlockConverter";
 import Sem2BlockConverter from "./components/Sem2BlockConverter";
 import { GoldenStudentReport } from "./components/GoldenStudentReport";
 import GoldenStudentReport1 from "./components/GoldenStudentReport1";
+import NepAnalysisSem3 from "./components/NepAnalysisSem3";
 
 const queryClient = new QueryClient();
 
@@ -98,10 +99,6 @@ const App = () => (
           />
           <Route path="/sem7-converter" element={<Sem7Converter />} />
           <Route path="/sem8-converter" element={<Sem8Converter />} />
-
-
-
-
           <Route path="/sem1-analysis" element={<Sem1Analysis />} />
           <Route path="/sem2-analysis" element={<Sem2Analysis />} />
           <Route path="/sem3-analysis" element={<Sem3Analysis />} />
@@ -112,6 +109,7 @@ const App = () => (
           <Route path="/sem8-analysis" element={<Sem8Analysis />} />
           <Route path="/golden-students" element={<GoldenStudentReport />} />
           <Route path="/golden-students1" element={<GoldenStudentReport1 />} />
+          <Route path="/nep-analysis-sem3" element={<NepAnalysisSem3 />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

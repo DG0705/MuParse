@@ -472,9 +472,11 @@ const Sem1Analysis: React.FC = () => {
           B.E. Semester I Result Analysis (Database)
         </h2>
         <div className="mt-4 flex justify-center items-center gap-3">
-          <label className="font-semibold text-gray-700">Filter by Admission Year:</label>
-          <select 
-            value={selectedYear} 
+          <label className="font-semibold text-gray-700">
+            Filter by Admission Year:
+          </label>
+          <select
+            value={selectedYear}
             onChange={(e) => setSelectedYear(e.target.value)}
             className="border border-gray-300 rounded px-3 py-1 outline-none focus:ring-2 focus:ring-blue-500"
           >

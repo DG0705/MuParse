@@ -6,7 +6,6 @@ const StudentMaster = require("../models/StudentMaster");
 const AcademicRecord = require("../models/AcademicRecord");
 const NepAcademicRecord = require("../models/NepAcademicRecord");
 
-// --- NEP PROCESSOR ---
 const uploadNepPdfData = async (req, res) => {
   try {
     if (!req.file)
@@ -169,12 +168,13 @@ const uploadNepPdfData = async (req, res) => {
     res.status(500).json({ error: `Server error: ${error.message}` });
   }
 };
+const CollegeStudentDetails = require("../models/CollegeStudentDetails");
 
-// --- R-19 CSV PROCESSOR ---
-const uploadCsvData = async (req, res) => {
+const uploadCsvDataSem5 = async (req, res) => {
   try {
     if (!req.file)
       return res.status(400).json({ message: "Upload a CSV file." });
+
     const csvString = req.file.buffer.toString();
     const { data } = Papa.parse(csvString, {
       header: true,
@@ -188,28 +188,112 @@ const uploadCsvData = async (req, res) => {
     const masterOps = [];
     const academicOps = [];
 
-    data.forEach((s) => {
+    // Using for...of loop to allow asynchronous database queries
+    for (const s of data) {
       const seatKey = Object.keys(s).find(
         (k) => k.trim() === "Seat No" || k.trim() === "Seat_No",
       );
       const cleanSeatNo = (seatKey ? s[seatKey] : "")
         .toString()
         .replace(/[^0-9]/g, "");
-      const rawPRN = (s["PRN"] || "").toString().replace(/[^0-9]/g, "");
-      if (!cleanSeatNo) return;
 
-      const finalPRN = rawPRN || `TEMP_${cleanSeatNo}`;
+      let rawPRN = (s["PRN"] || "").toString().replace(/[^0-9]/g, "");
 
-      // 1. EXTRACT THE ADMISSION YEAR (First 4 digits of PRN)
-      const batchYear = rawPRN && rawPRN.length >= 4 ? rawPRN.substring(0, 4) : "Unknown";
+      if (!cleanSeatNo) continue; // Skip rows without a valid seat number
 
-      // 2. Extract using BOTH variations
+      // ==========================================
+      // --- GENDER EXTRACTION & NAME CLEANUP ---
+      // ==========================================
+      let rawName = (s["Name"] || s["name"] || "").trim();
+      let extractedGender = s["Gender"] || ""; // Fallback if CSV actually has a gender column
+
+      // Check for the '/' prefix to determine gender
+      if (rawName.startsWith("/")) {
+        extractedGender = "Female";
+        rawName = rawName.substring(1).trim(); // Remove the '/' so the database gets a clean name
+      } else if (rawName.length > 0) {
+        extractedGender = "Male";
+      }
+
+      // Update the current row's name so all downstream logic uses the clean name
+      s["Name"] = rawName;
+
+      // ==========================================
+      // --- BULLETPROOF PRN LOOKUP LOGIC ---
+      // ==========================================
+      let finalPRN = rawPRN;
+
+      if (!finalPRN) {
+        let csvName = rawName; // Use our newly cleaned name
+
+        if (csvName) {
+          // 1. Sanitize: Replace ., -, ,, and brackets with spaces (We already removed the '/')
+          csvName = csvName.replace(/[.,\-()]/g, " ");
+
+          // 2. Split into words and ignore single-letter initials
+          const nameWords = csvName
+            .split(/\s+/)
+            .filter((w) => w.trim().length > 1);
+
+          if (nameWords.length > 0) {
+            // Safely escape regex characters
+            const escapeRegExp = (string) =>
+              string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+            // Take the first two words (Usually Surname + First Name)
+            const primaryWords = nameWords.slice(0, 2);
+
+            // 3. FIX: Add word boundaries (\b) to prevent "YASH" from matching "YASHODEEP"
+            const searchConditions = primaryWords.map((word) => ({
+              name: {
+                $regex: "\\b" + escapeRegExp(word) + "\\b",
+                $options: "i",
+              },
+            }));
+
+            // ATTEMPT 1: Find all students matching BOTH primary words exactly
+            let matchedStudents = await CollegeStudentDetail.find({
+              $and: searchConditions,
+            });
+
+            // SAFETY CHECK: Only assign PRN if exactly ONE student matches
+            if (matchedStudents.length === 1) {
+              finalPRN = matchedStudents[0].prn
+                .toString()
+                .replace(/[^0-9]/g, "");
+            }
+            // ATTEMPT 2: Fallback to searching just the surname
+            else if (matchedStudents.length === 0 && primaryWords.length > 0) {
+              const fallbackMatches = await CollegeStudentDetail.find({
+                name: {
+                  $regex: "\\b" + escapeRegExp(primaryWords[0]) + "\\b",
+                  $options: "i",
+                },
+              });
+
+              // SAFETY CHECK: Only assign if there is exactly ONE person with this surname in the DB
+              if (fallbackMatches.length === 1) {
+                finalPRN = fallbackMatches[0].prn
+                  .toString()
+                  .replace(/[^0-9]/g, "");
+              }
+            }
+          }
+        }
+      }
+
+      // Final Fallback: If no unique match is found, assign a TEMP PRN
+      finalPRN = finalPRN || `TEMP_${cleanSeatNo}`;
+      // ==========================================
+
+      // Extract result fields
       const extractedSGPI = s["SGPI"] || s["SGPA"] || "0";
       const extractedTotal = s["Grand_Total"] || s["Total Marks"] || "0";
       const extractedResult = s["Result"] || s["Final Result"] || "N/A";
 
       const flatSubjects = {};
-      // 3. Exclude BOTH variations so they don't end up in the subjects list
+
+      // Exclude these keys so they don't get saved inside the subjects object
       const excludedKeys = [
         "seat no",
         "seat_no",
@@ -224,20 +308,20 @@ const uploadCsvData = async (req, res) => {
         "total marks",
         "remark",
       ];
+
       Object.keys(s).forEach((key) => {
-        if (!excludedKeys.includes(key.toLowerCase().trim()))
+        if (!excludedKeys.includes(key.toLowerCase().trim())) {
           flatSubjects[key] = s[key];
+        }
       });
 
+      // Prepare BulkWrite Operations
       masterOps.push({
         updateOne: {
           filter: { prn: finalPRN },
           update: {
-            $set: { 
-              gender: s["Gender"] || "",
-              batch: batchYear // <-- Saving the batch explicitly here
-            },
-            $setOnInsert: { name: s["Name"] || "Unknown" },
+            $set: { gender: extractedGender }, // Insert the smartly extracted gender
+            $setOnInsert: { name: rawName || "Unknown" }, // Use the clean name without the slash
           },
           upsert: true,
         },
@@ -258,8 +342,9 @@ const uploadCsvData = async (req, res) => {
           upsert: true,
         },
       });
-    });
+    }
 
+    // Execute bulk updates if arrays are not empty
     if (masterOps.length > 0) await StudentMaster.bulkWrite(masterOps);
     if (academicOps.length > 0) await AcademicRecord.bulkWrite(academicOps);
 
@@ -268,7 +353,7 @@ const uploadCsvData = async (req, res) => {
       message: "CSV Processed and saved to R-19 Database",
       students: data.map((s) => ({
         seat_no: s["Seat No"] || s["Seat_No"],
-        name: s["Name"],
+        name: s["Name"], // Now reflects the clean name without the slash
         prn: s["PRN"],
         result: s["Result"] || s["Final Result"],
         sgpi: s["SGPI"] || s["SGPA"],
@@ -279,10 +364,167 @@ const uploadCsvData = async (req, res) => {
   }
 };
 
+const uploadCsvData = async (req, res) => {
+  try {
+    if (!req.file)
+      return res.status(400).json({ message: "Upload a CSV file." });
+
+    const csvString = req.file.buffer.toString();
+    const { data } = Papa.parse(csvString, {
+      header: true,
+      skipEmptyLines: true,
+    });
+
+    const semNum = Number(req.body.semester);
+    if (!semNum)
+      return res.status(400).json({ message: "Semester number is required." });
+
+    // ==========================================
+    // 1. Fetch Baseline from CollegeStudentDetails
+    // ==========================================
+    const collegeStudents = await CollegeStudentDetails.find(
+      {},
+      "prn name",
+    ).lean();
+    const validPrns = new Set();
+    const validNames = new Set();
+
+    collegeStudents.forEach((student) => {
+      if (student.prn) validPrns.add(student.prn.toString().trim());
+      if (student.name) validNames.add(student.name.toLowerCase().trim());
+    });
+
+    // Operation arrays for the 3 controllers
+    const academicOps = []; // Controller 1: Marks
+    const collegeUpdateOps = []; // Controller 2: Boolean Flags
+    const masterOps = []; // Controller 3: Active Profiles
+    const savedStudents = [];
+
+    data.forEach((s) => {
+      const seatKey = Object.keys(s).find(
+        (k) => k.trim() === "Seat No" || k.trim() === "Seat_No",
+      );
+      const cleanSeatNo = (seatKey ? s[seatKey] : "")
+        .toString()
+        .replace(/[^0-9]/g, "");
+      const rawPRN = (s["PRN"] || "").toString().replace(/[^0-9]/g, "");
+      const studentName = (s["Name"] || "").toLowerCase().trim();
+
+      if (!cleanSeatNo) return;
+
+      // ==========================================
+      // THE SMART FILTER
+      // ==========================================
+      const prnMatch = rawPRN && validPrns.has(rawPRN);
+      const nameMatch = studentName && validNames.has(studentName);
+
+      // If the student is NOT in CollegeStudentDetails, SKIP them entirely
+      if (!prnMatch && !nameMatch) return;
+
+      const finalPRN = rawPRN || `TEMP_${cleanSeatNo}`;
+      const extractedSGPI = s["SGPI"] || s["SGPA"] || "0";
+      const extractedTotal = s["Grand_Total"] || s["Total Marks"] || "0";
+      const extractedResult = s["Result"] || s["Final Result"] || "N/A";
+
+      const flatSubjects = {};
+      const excludedKeys = [
+        "seat no",
+        "seat_no",
+        "prn",
+        "name",
+        "gender",
+        "result",
+        "final result",
+        "sgpi",
+        "sgpa",
+        "grand_total",
+        "total marks",
+        "remark",
+      ];
+      Object.keys(s).forEach((key) => {
+        if (!excludedKeys.includes(key.toLowerCase().trim())) {
+          flatSubjects[key] = s[key];
+        }
+      });
+
+      // ==========================================
+      // Controller 1: Save Marks to AcademicRecord
+      // ==========================================
+      academicOps.push({
+        updateOne: {
+          filter: { prn: finalPRN, semester: semNum },
+          update: {
+            $set: {
+              seatNo: cleanSeatNo,
+              sgpi: extractedSGPI,
+              totalMarks: extractedTotal,
+              finalResult: extractedResult,
+              subjects: flatSubjects,
+            },
+          },
+          upsert: true,
+        },
+      });
+
+      // ==========================================
+      // Controller 2: Update Sem Boolean in CollegeStudentDetails
+      // ==========================================
+      const semKey = `Sem${semNum}`; // e.g., "Sem1", "Sem2"
+      collegeUpdateOps.push({
+        updateOne: {
+          filter: { prn: finalPRN },
+          update: {
+            $set: {
+              [semKey]: true, // Dynamically flips Sem1, Sem2, etc., to TRUE
+            },
+          },
+        },
+      });
+
+      // ==========================================
+      // Controller 3: Save Details to StudentMaster
+      // ==========================================
+      masterOps.push({
+        updateOne: {
+          filter: { prn: finalPRN },
+          update: {
+            $set: {
+              gender: s["Gender"] || "",
+            },
+            $setOnInsert: { name: s["Name"] || "Unknown" },
+          },
+          upsert: true,
+        },
+      });
+
+      savedStudents.push({
+        seat_no: cleanSeatNo,
+        name: s["Name"],
+        prn: finalPRN,
+        result: extractedResult,
+      });
+    });
+
+    // Execute all database updates in parallel bulk writes for fast performance
+    if (academicOps.length > 0) await AcademicRecord.bulkWrite(academicOps);
+    if (collegeUpdateOps.length > 0)
+      await CollegeStudentDetails.bulkWrite(collegeUpdateOps);
+    if (masterOps.length > 0) await StudentMaster.bulkWrite(masterOps);
+
+    res.status(200).json({
+      success: true,
+      message: `Processed securely! Saved ${academicOps.length} matched students across all 3 databases.`,
+      students: savedStudents,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
 const getStudents = async (req, res) => {
   try {
     const { semester, isNEP, prnPrefix } = req.query;
-    
+
     // Create query object
     const query = {};
     if (semester) query.semester = Number(semester);
@@ -537,16 +779,13 @@ const getStudentHistory = async (req, res) => {
 
 const getStudentsByBatch = async (req, res) => {
   try {
-    // Exact match on the explicitly stored 'batch' field
     const students = await StudentMaster.find({
-      batch: req.params.batch,
+      batch: new RegExp(req.params.batch, "i"),
     });
-    
     if (students.length === 0)
       return res
         .status(404)
         .json({ message: "No students found for this batch" });
-        
     res.status(200).json(students);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -712,9 +951,6 @@ const uploadAtktCsvData = async (req, res) => {
   }
 };
 
-// ==========================================
-// 1. SEMESTER 1 - Data Fetcher
-// ==========================================
 const getSem1Students = async (req, res) => {
   try {
     const { prnPrefix } = req.query;
@@ -752,7 +988,8 @@ const getSem1Students = async (req, res) => {
       };
 
       return {
-        "Seat No": record.seatNo || record.studentInfo?.seatNo || record.prn || "N/A",
+        "Seat No":
+          record.seatNo || record.studentInfo?.seatNo || record.prn || "N/A",
         Name: record.studentInfo?.name || "Unknown",
         Gender: record.studentInfo?.gender || "Unknown",
         Result: record.finalResult || "N/A",
@@ -761,7 +998,10 @@ const getSem1Students = async (req, res) => {
         Eng_Physics_I_Marks: findMarks("58652", "Engineering Physics - I"),
         Eng_Chem_I_Marks: findMarks("58655", "Engineering Chemistry - I"),
         Eng_Mechanics_Marks: findMarks("58653", "Engineering Mechanics"),
-        Basic_Elec_Eng_Marks: findMarks("58654", "Basic Electrical Engineering"),
+        Basic_Elec_Eng_Marks: findMarks(
+          "58654",
+          "Basic Electrical Engineering",
+        ),
         ...subjects,
       };
     });
@@ -772,7 +1012,6 @@ const getSem1Students = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
-
 const getSem3Students = async (req, res) => {
   try {
     const { prnPrefix } = req.query;
@@ -810,7 +1049,8 @@ const getSem3Students = async (req, res) => {
       };
 
       return {
-        "Seat No": record.seatNo || record.studentInfo?.seatNo || record.prn || "N/A",
+        "Seat No":
+          record.seatNo || record.studentInfo?.seatNo || record.prn || "N/A",
         Name: record.studentInfo?.name || "Unknown",
         Gender: record.studentInfo?.gender || "Unknown",
         Result: record.finalResult || "N/A",
@@ -819,7 +1059,10 @@ const getSem3Students = async (req, res) => {
         Eng_Physics_I_Marks: findMarks("58652", "Engineering Physics - I"),
         Eng_Chem_I_Marks: findMarks("58655", "Engineering Chemistry - I"),
         Eng_Mechanics_Marks: findMarks("58653", "Engineering Mechanics"),
-        Basic_Elec_Eng_Marks: findMarks("58654", "Basic Electrical Engineering"),
+        Basic_Elec_Eng_Marks: findMarks(
+          "58654",
+          "Basic Electrical Engineering",
+        ),
         ...subjects,
       };
     });
@@ -831,9 +1074,6 @@ const getSem3Students = async (req, res) => {
   }
 };
 
-// ==========================================
-// SEMESTER 2 - Data Fetcher (with MU Paper Codes)
-// ==========================================
 const getSem2Students = async (req, res) => {
   try {
     const { prnPrefix } = req.query;
@@ -870,12 +1110,16 @@ const getSem2Students = async (req, res) => {
       };
 
       return {
-        "Seat No": record.seatNo || record.studentInfo?.seatNo || record.prn || "N/A",
+        "Seat No":
+          record.seatNo || record.studentInfo?.seatNo || record.prn || "N/A",
         Name: record.studentInfo?.name || "Unknown",
         Gender: record.studentInfo?.gender || "Unknown",
         Result: record.finalResult || "N/A",
         SGPI: record.sgpi || "0",
-        "Eng_Maths-II_Marks": findMarks("29711", "Engineering Mathematics - II"),
+        "Eng_Maths-II_Marks": findMarks(
+          "29711",
+          "Engineering Mathematics - II",
+        ),
         "Eng_Physics-II_Marks": findMarks("29712", "Engineering Physics - II"),
         "Eng_Chem-II_Marks": findMarks("29713", "Engineering Chemistry - II"),
         Eng_Graphics_Marks: findMarks("29714", "Engineering Graphics"),
@@ -934,7 +1178,11 @@ const getSem7Students = async (req, res) => {
         if (sem7Map && sem7Map[dbKey]) {
           mappedSubjects[sem7Map[dbKey]] = marks;
         } else {
-          if (!dbKey.includes("code") && !dbKey.includes("marks") && !dbKey.includes("cr")) {
+          if (
+            !dbKey.includes("code") &&
+            !dbKey.includes("marks") &&
+            !dbKey.includes("cr")
+          ) {
             const fallbackKey = dbKey.replace(/\s+/g, "_") + "_Marks";
             mappedSubjects[fallbackKey] = marks;
           }
@@ -945,12 +1193,15 @@ const getSem7Students = async (req, res) => {
         const pCode = subjects[`paper${i}code`];
         const pMarks = subjects[`paper${i}marks`];
         if (pCode && pMarks) {
-          mappedSubjects[`SubjectCode_${pCode.toString().replace(".0", "")}_Marks`] = pMarks;
+          mappedSubjects[
+            `SubjectCode_${pCode.toString().replace(".0", "")}_Marks`
+          ] = pMarks;
         }
       }
 
       return {
-        "Seat No": record.seatNo || record.studentInfo?.seatNo || record.prn || "N/A",
+        "Seat No":
+          record.seatNo || record.studentInfo?.seatNo || record.prn || "N/A",
         Name: record.studentInfo?.name || "Unknown",
         Gender: record.studentInfo?.gender || "Unknown",
         Result: record.finalResult || "N/A",
@@ -967,16 +1218,683 @@ const getSem7Students = async (req, res) => {
   }
 };
 
+// ==========================================
+// SEMESTER 4, 5, 6 - Data Fetcher Placeholders
+// ==========================================
+const getSem4Students = async (req, res) => {
+  try {
+    res.status(200).json([]); // Placeholder - add real logic later
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const getSem5Students = async (req, res) => {
+  try {
+    res.status(200).json([]); // Placeholder - add real logic later
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const getSem6Students = async (req, res) => {
+  try {
+    res.status(200).json([]); // Placeholder - add real logic later
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const uploadMasterCsv = async (req, res) => {
+  try {
+    if (!req.file)
+      return res.status(400).json({ message: "Upload a CSV file." });
+
+    const csvString = req.file.buffer.toString();
+    const { data } = Papa.parse(csvString, {
+      header: true,
+      skipEmptyLines: true,
+    });
+
+    const masterOps = [];
+
+    data.forEach((s) => {
+      // SMART SEARCH: Look for any column header that contains "prn" or "registration"
+      const prnKey = Object.keys(s).find(
+        (k) =>
+          k.toLowerCase().includes("prn") ||
+          k.toLowerCase().includes("registration"),
+      );
+
+      // SMART SEARCH: Look for any column header that contains "name"
+      const nameKey = Object.keys(s).find((k) =>
+        k.toLowerCase().includes("name"),
+      );
+
+      const rawPRN =
+        prnKey && s[prnKey] ? s[prnKey].toString().replace(/[^0-9]/g, "") : "";
+      const name = nameKey && s[nameKey] ? s[nameKey] : "Unknown";
+
+      // If there is no PRN, skip the row
+      if (!rawPRN) return;
+
+      masterOps.push({
+        updateOne: {
+          filter: { prn: rawPRN },
+          update: {
+            $set: {
+              name: name,
+            },
+          },
+          upsert: true, // Creates the student if they don't exist, updates if they do
+        },
+      });
+    });
+
+    if (masterOps.length > 0) {
+      // Now bulk writing to the new collection
+      await CollegeStudentDetails.bulkWrite(masterOps);
+
+      res.status(200).json({
+        success: true,
+        message: `Master Data Uploaded! Successfully added/updated ${masterOps.length} students in the database.`,
+      });
+    } else {
+      res
+        .status(400)
+        .json({ error: "No valid students with PRNs found in the CSV." });
+    }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+const getSemAnalysis = async (req, res) => {
+  try {
+    const semNum = Number(req.params.sem);
+    if (!semNum)
+      return res.status(400).json({ message: "Semester is required" });
+
+    // 1. Fetch all academic records for the semester
+    const records = await AcademicRecord.find({ semester: semNum }).lean();
+
+    if (!records || records.length === 0) {
+      return res
+        .status(404)
+        .json({ message: `No records found for Semester ${semNum}` });
+    }
+
+    // Fetch student names and gender to map PRN -> Data
+    const prns = records.map((r) => r.prn);
+    const students = await StudentMaster.find({ prn: { $in: prns } }).lean();
+
+    const studentMap = {};
+    students.forEach((s) => {
+      studentMap[s.prn] = {
+        name: s.name,
+        gender: s.gender || "Male", // Default to Male if missing
+      };
+    });
+
+    // 2. Initialize Variables for Overall & Gender Statistics
+    let totalStudents = records.length;
+    let totalPassed = 0;
+    let totalFailed = 0;
+
+    let malePassed = 0;
+    let maleFailed = 0;
+    let maleTotal = 0;
+
+    let femalePassed = 0;
+    let femaleFailed = 0;
+    let femaleTotal = 0;
+
+    let studentsList = [];
+    let subjectStats = {};
+
+    // 3. Define DYNAMIC TARGET SUBJECTS based on Semester
+    let targetSubjects = [];
+
+    if (semNum === 5) {
+      targetSubjects = [
+        "IP_TOT_Marks",
+        "CNS_TOT_Marks",
+        "EEB_TOT_Marks",
+        "SE_TOT_Marks",
+        "ADSA_TOT_Marks",
+        "ADMT_TOT_Marks",
+      ];
+    } else if (semNum === 7) {
+      // You can keep all Sem 7 and Sem 8 keys here, it will automatically filter based on what exists in the DB
+      targetSubjects = [
+        // Sem 7
+        "AI_DS_II_Marks",
+        "IoE_Marks",
+        // "Data_Science_Lab_Marks",
+        // "Major_Project_I_Marks",
+        "Mgmt_Info_Sys_Marks",
+        "Infra_Security_Marks",
+        "Info_Retrieval_Sys_Marks",
+        "Cyber_Security_Laws_Marks",
+        "Software_Testing_QA_Marks",
+        // Sem 8
+        "Blockchain_DLT_Marks",
+        "Big_Data_Marks",
+        "Knowledge_Mgmt_Marks",
+        "ERP_Marks",
+        "Project_Mgmt_Marks",
+      ];
+    }
+
+    // 4. Process Each Student Record
+    records.forEach((record) => {
+      const studentData = studentMap[record.prn] || {
+        name: "Unknown",
+        gender: "Male",
+      };
+      const studentName = studentData.name;
+      const isFemale =
+        String(studentData.gender).trim().toLowerCase() === "female";
+
+      const sgpi = parseFloat(record.sgpi) || 0;
+
+      // Safe Pass Check
+      const safeResult = record.finalResult
+        ? record.finalResult.trim().toUpperCase()
+        : "";
+      const isPassed =
+        safeResult === "P" ||
+        safeResult === "PASS" ||
+        safeResult === "SUCCESSFUL";
+
+      // Increment Overall & Gender Counters
+      if (isPassed) {
+        totalPassed++;
+        if (isFemale) femalePassed++;
+        else malePassed++;
+      } else {
+        totalFailed++;
+        if (isFemale) femaleFailed++;
+        else maleFailed++;
+      }
+
+      if (isFemale) femaleTotal++;
+      else maleTotal++;
+
+      // Populate student list
+      studentsList.push({
+        prn: record.prn,
+        seatNo: record.seatNo,
+        name: studentName,
+        sgpi: sgpi,
+        result: record.finalResult || "N/A",
+        totalMarks: record.totalMarks || 0,
+      });
+
+      // Process Subject-wise marks
+      if (record.subjects) {
+        Object.entries(record.subjects).forEach(([subKey, markValue]) => {
+          if (!targetSubjects.includes(subKey)) return;
+
+          // Variables strictly scoped inside this loop
+          let mark = NaN;
+
+          if (typeof markValue === "object" && markValue !== null) {
+            mark = parseFloat(markValue.totalMarks || markValue.marks || 0);
+          } else {
+            const match = String(markValue).match(/(\d+(\.\d+)?)/);
+            if (match) {
+              mark = parseFloat(match[0]);
+            }
+          }
+
+          if (!subjectStats[subKey]) {
+            subjectStats[subKey] = {
+              subjectName: subKey,
+              allScorers: [],
+              appeared: 0,
+              passed: 0,
+              marks40to50: 0,
+              marks51to59: 0,
+              marks60Plus: 0,
+            };
+          }
+
+          subjectStats[subKey].appeared++;
+
+          if (!isNaN(mark) && mark >= 40) {
+            subjectStats[subKey].passed++;
+          }
+
+          // Bucket tracking for Charts and Summary Table
+          if (!isNaN(mark)) {
+            if (mark >= 40 && mark <= 50) subjectStats[subKey].marks40to50++;
+            else if (mark > 50 && mark < 60) subjectStats[subKey].marks51to59++;
+            else if (mark >= 60) subjectStats[subKey].marks60Plus++;
+
+            subjectStats[subKey].allScorers.push({
+              name: studentName,
+              marks: mark,
+            });
+          }
+        });
+      }
+    });
+
+    // 5. Sort Students and Calculate Overall Rank
+    studentsList.sort((a, b) => b.sgpi - a.sgpi);
+
+    let currentRank = 1;
+    studentsList.forEach((student, index) => {
+      if (index > 0 && student.sgpi < studentsList[index - 1].sgpi) {
+        currentRank = index + 1;
+      }
+      student.overallRank = currentRank;
+    });
+
+    const topOverall = studentsList.slice(0, 3).map((s, index) => ({
+      rank: index + 1,
+      name: s.name,
+      sgpi: s.sgpi,
+    }));
+
+    // 6. Sort subject marks and extract Top 3 per subject
+    const subjectAnalysis = Object.values(subjectStats).map((stat) => {
+      const sortedScorers = stat.allScorers.sort((a, b) => b.marks - a.marks);
+      const top3Scorers = sortedScorers.slice(0, 3);
+
+      return {
+        subject: stat.subjectName,
+        topScorers: top3Scorers,
+        appeared: stat.appeared,
+        passed: stat.passed,
+        marks40to50: stat.marks40to50,
+        marks51to59: stat.marks51to59,
+        marks60Plus: stat.marks60Plus,
+        passPercentage:
+          stat.appeared > 0
+            ? ((stat.passed / stat.appeared) * 100).toFixed(2)
+            : 0,
+      };
+    });
+
+    const passPercentage =
+      totalStudents > 0 ? ((totalPassed / totalStudents) * 100).toFixed(2) : 0;
+
+    // 7. Return Final JSON
+    res.status(200).json({
+      success: true,
+      analysis: {
+        semester: semNum,
+        overall: {
+          totalStudents,
+          totalPassed,
+          totalFailed,
+          passPercentage,
+          gender: {
+            male: { passed: malePassed, failed: maleFailed, total: maleTotal },
+            female: {
+              passed: femalePassed,
+              failed: femaleFailed,
+              total: femaleTotal,
+            },
+          },
+        },
+        topOverall,
+        subjectAnalysis,
+      },
+      studentsList,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// Add this to your controllers file
+// const Papa = require("papaparse");
+
+const analyzeSem3CsvDirectly = async (req, res) => {
+  try {
+    if (!req.file)
+      return res.status(400).json({ message: "Upload a CSV file." });
+
+    const csvString = req.file.buffer.toString();
+
+    // Parse as 2D Array
+    const { data } = Papa.parse(csvString, {
+      header: false,
+      skipEmptyLines: true,
+    });
+
+    const minRow = data[4] || []; // Row 4 has the passing minimums
+
+    // Initialize Stats
+    let totalStudents = 0,
+      totalPassed = 0,
+      totalFailed = 0;
+    let malePassed = 0,
+      maleFailed = 0,
+      maleTotal = 0;
+    let femalePassed = 0,
+      femaleFailed = 0,
+      femaleTotal = 0;
+    let studentsList = [];
+
+    // Subject Mapping for Sem 3 (Theory + IA columns)
+    const subjectMappings = {
+      AMT_Marks: { th: 2, ia: 3 },
+      ADSA_Marks: { th: 5, ia: 6 },
+      DBMS_Marks: { th: 7, ia: 8 },
+      AT_Marks: { th: 9, ia: 10 },
+      OE_Marks: { th: 11, ia: 12 },
+    };
+
+    let subjectStats = {};
+    Object.keys(subjectMappings).forEach((key) => {
+      subjectStats[key] = {
+        subjectName: key,
+        allScorers: [],
+        appeared: 0,
+        passed: 0,
+        marks40to50: 0,
+        marks51to59: 0,
+        marks60Plus: 0,
+      };
+    });
+
+    const getMark = (val) => (isNaN(parseFloat(val)) ? 0 : parseFloat(val));
+
+    // Loop through students starting at Row 5
+    for (let i = 5; i < data.length; i++) {
+      const row = data[i];
+      const seatNo = (row[0] || "").toString().trim();
+      if (!seatNo) continue;
+
+      let rawName = (row[1] || "").toString().trim();
+      let prn = `TEMP_${seatNo}`;
+
+      // Extract PRN and Name (MU03411... \n [Name])
+      if (rawName.includes("\n")) {
+        const parts = rawName.split("\n");
+        prn = parts[0].replace(/[^0-9A-Za-z]/g, "");
+        rawName = parts[1].replace("[", "").replace("]", "").trim();
+      }
+
+      // Check Female prefix '/'
+      let isFemale = false;
+      if (rawName.startsWith("/")) {
+        isFemale = true;
+        rawName = rawName.substring(1).trim();
+      }
+
+      totalStudents++;
+      if (isFemale) femaleTotal++;
+      else maleTotal++;
+
+      // Overall Pass/Fail Logic (Must pass minimum in every column)
+      let isPassed = true;
+      for (let c = 2; c <= 20; c++) {
+        const minMark = getMark(minRow[c]);
+        const studentMark = getMark(row[c]);
+        if (minMark > 0 && studentMark < minMark) {
+          isPassed = false;
+          break;
+        }
+      }
+
+      if (isPassed) {
+        totalPassed++;
+        if (isFemale) femalePassed++;
+        else malePassed++;
+      } else {
+        totalFailed++;
+        if (isFemale) femaleFailed++;
+        else maleFailed++;
+      }
+
+      const totalMarks = getMark(row[21]);
+
+      studentsList.push({
+        seatNo,
+        prn,
+        name: rawName || "Unknown",
+        result: isPassed ? "P" : "F",
+        sgpi: totalMarks, // Using 'sgpi' key for Total Marks to easily reuse frontend sorting
+      });
+
+      // Process Individual Subjects
+      Object.entries(subjectMappings).forEach(([subKey, cols]) => {
+        const thMark = getMark(row[cols.th]);
+        const iaMark = getMark(row[cols.ia]);
+        const totalSubMark = thMark + iaMark;
+
+        subjectStats[subKey].appeared++;
+        if (totalSubMark >= 40) subjectStats[subKey].passed++;
+
+        // Bucket Logic
+        if (totalSubMark >= 40 && totalSubMark <= 50)
+          subjectStats[subKey].marks40to50++;
+        else if (totalSubMark > 50 && totalSubMark <= 59)
+          subjectStats[subKey].marks51to59++;
+        else if (totalSubMark >= 60) subjectStats[subKey].marks60Plus++;
+
+        subjectStats[subKey].allScorers.push({
+          name: rawName,
+          marks: totalSubMark,
+        });
+      });
+    }
+
+    // Sort Students by Total Marks
+    studentsList.sort((a, b) => b.sgpi - a.sgpi);
+    let currentRank = 1;
+    studentsList.forEach((student, index) => {
+      if (index > 0 && student.sgpi < studentsList[index - 1].sgpi)
+        currentRank = index + 1;
+      student.overallRank = currentRank;
+    });
+
+    const topOverall = studentsList.slice(0, 3).map((s) => ({
+      rank: s.overallRank,
+      name: s.name,
+      sgpi: s.sgpi,
+    }));
+
+    // Sort Top Subjects
+    const subjectAnalysis = Object.values(subjectStats).map((stat) => {
+      const sortedScorers = stat.allScorers.sort((a, b) => b.marks - a.marks);
+      return {
+        subject: stat.subjectName,
+        topScorers: sortedScorers.slice(0, 3),
+        appeared: stat.appeared,
+        passed: stat.passed,
+        marks40to50: stat.marks40to50,
+        marks51to59: stat.marks51to59,
+        marks60Plus: stat.marks60Plus,
+        passPercentage:
+          stat.appeared > 0
+            ? ((stat.passed / stat.appeared) * 100).toFixed(2)
+            : 0,
+      };
+    });
+
+    res.status(200).json({
+      success: true,
+      analysis: {
+        semester: 3,
+        overall: {
+          totalStudents,
+          totalPassed,
+          totalFailed,
+          passPercentage:
+            totalStudents > 0
+              ? ((totalPassed / totalStudents) * 100).toFixed(2)
+              : 0,
+          gender: {
+            male: { passed: malePassed, failed: maleFailed, total: maleTotal },
+            female: {
+              passed: femalePassed,
+              failed: femaleFailed,
+              total: femaleTotal,
+            },
+          },
+        },
+        topOverall,
+        subjectAnalysis,
+      },
+      studentsList,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// const getSem7Analysis = async (req, res) => {
+//   try {
+//     const semNum = Number(req.params.sem);
+//     if (!semNum)
+//       return res.status(400).json({ message: "Semester is required" });
+
+//     const records = await AcademicRecord.find({ semester: semNum }).lean();
+
+//     if (!records || records.length === 0) {
+//       return res
+//         .status(404)
+//         .json({ message: `No records found for Semester ${semNum}` });
+//     }
+
+//     // Fetch student names
+//     const prns = records.map((r) => r.prn);
+//     const students = await StudentMaster.find({ prn: { $in: prns } }).lean();
+//     const studentMap = {};
+//     students.forEach((s) => {
+//       studentMap[s.prn] = s.name;
+//     });
+
+//     let totalStudents = records.length;
+//     let totalPassed = 0;
+//     let totalFailed = 0;
+
+//     let studentsList = [];
+//     let subjectStats = {};
+
+//     records.forEach((record) => {
+//       const studentName = studentMap[record.prn] || "Unknown";
+//       const sgpi = parseFloat(record.sgpi) || 0;
+
+//       const isPassed =
+//         record.finalResult && record.finalResult.trim().toUpperCase() === "P";
+//       if (isPassed) totalPassed++;
+//       else totalFailed++;
+
+//       studentsList.push({
+//         prn: record.prn,
+//         seatNo: record.seatNo,
+//         name: studentName,
+//         sgpi: sgpi,
+//         result: record.finalResult || "N/A",
+//         totalMarks: record.totalMarks || 0,
+//       });
+
+//       // Process Subject-wise marks (NO FILTER - GRAB EVERYTHING)
+//       if (record.subjects) {
+//         Object.entries(record.subjects).forEach(([subKey, markValue]) => {
+//           let mark = NaN;
+
+//           if (typeof markValue === "object" && markValue !== null) {
+//             mark = parseFloat(markValue.totalMarks || markValue.marks || 0);
+//           } else {
+//             const match = String(markValue).match(/(\d+(\.\d+)?)/);
+//             if (match) {
+//               mark = parseFloat(match[0]);
+//             }
+//           }
+
+//           // If there is no number found, skip this column entirely
+//           if (isNaN(mark)) return;
+
+//           if (!subjectStats[subKey]) {
+//             subjectStats[subKey] = {
+//               subjectName: subKey,
+//               allScorers: [],
+//               appeared: 0,
+//               passed: 0,
+//             };
+//           }
+
+//           subjectStats[subKey].appeared++;
+
+//           if (mark >= 40) {
+//             subjectStats[subKey].passed++;
+//           }
+
+//           subjectStats[subKey].allScorers.push({
+//             name: studentName,
+//             marks: mark,
+//           });
+//         });
+//       }
+//     });
+
+//     // Sort overall students
+//     studentsList.sort((a, b) => b.sgpi - a.sgpi);
+//     const topOverall = studentsList.slice(0, 3).map((s, index) => ({
+//       rank: index + 1,
+//       name: s.name,
+//       sgpi: s.sgpi,
+//     }));
+
+//     // Sort subject marks and extract Top 3 per subject
+//     const subjectAnalysis = Object.values(subjectStats).map((stat) => {
+//       const sortedScorers = stat.allScorers.sort((a, b) => b.marks - a.marks);
+//       const top3Scorers = sortedScorers.slice(0, 3);
+
+//       return {
+//         subject: stat.subjectName,
+//         topScorers: top3Scorers,
+//         passPercentage:
+//           stat.appeared > 0
+//             ? ((stat.passed / stat.appeared) * 100).toFixed(2)
+//             : 0,
+//       };
+//     });
+
+//     const passPercentage =
+//       totalStudents > 0 ? ((totalPassed / totalStudents) * 100).toFixed(2) : 0;
+
+//     res.status(200).json({
+//       success: true,
+//       analysis: {
+//         semester: semNum,
+//         overall: { totalStudents, totalPassed, totalFailed, passPercentage },
+//         topOverall,
+//         subjectAnalysis,
+//       },
+//       studentsList,
+//     });
+//   } catch (error) {
+//     res.status(500).json({ success: false, error: error.message });
+//   }
+// };
+
 module.exports = {
   uploadCsvData,
+  uploadCsvDataSem5,
   uploadNepPdfData,
   uploadAtktCsvData,
   getStudents,
   getStudentHistory,
   getStudentsByBatch,
+  uploadMasterCsv,
   mergeStudents,
-  getSem7Students,
-  getSem2Students,
   getSem1Students,
+  getSem2Students,
   getSem3Students,
+  getSem4Students, // Safely exported
+  getSem5Students, // Safely exported
+  getSem6Students, // Safely exported
+  getSem7Students,
+  getSemAnalysis,
+  analyzeSem3CsvDirectly,
+  // getSem7Analysis,
 };

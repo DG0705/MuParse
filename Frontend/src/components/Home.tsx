@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import axios from "axios";
+import MasterUploadButton from "./MasterUploadButton";
 
 
 
@@ -310,6 +311,10 @@ const Home = () => {
               </CardContent>
             </Card>
           </TabsContent>
+          {/* 2. Call it right here! */}
+      <div className="mb-8">
+        <MasterUploadButton /> 
+      </div>
 
           {/* ==================== 3. SEARCH & HISTORY TAB ==================== */}
           <TabsContent value="search" className="animate-in fade-in-50">
