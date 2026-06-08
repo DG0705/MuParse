@@ -13,27 +13,17 @@ import {
 const Sem5Analysis = () => {
   const [data, setData] = useState(null);
 
-  // NEW: Store teacher names in React State so they can be edited
+  // Store teacher names in React State so they can be edited dynamically
   const [teachers, setTeachers] = useState({
-    Blockchain_DLT_Marks: "Dr. Anushree Deshmukh",
-    Big_Data_Marks: "Prof. Ankush Hutke",
-    Knowledge_Mgmt_Marks: "Dr. S.B.Wankhade",
-    ERP_Marks: "Prof. A.E.Patil",
-    Project_Mgmt_Marks: "Prof. Atul Londhekar",
-    // Default placeholders for Sem 7 just in case
-    AI_DS_II_Marks: "Enter Teacher Name",
-    IoE_Marks: "Enter Teacher Name",
-    Data_Science_Lab_Marks: "Enter Teacher Name",
-    Major_Project_I_Marks: "Enter Teacher Name",
-    Mgmt_Info_Sys_Marks: "Enter Teacher Name",
-    Infra_Security_Marks: "Enter Teacher Name",
-    Info_Retrieval_Sys_Marks: "Enter Teacher Name",
-    Cyber_Security_Laws_Marks: "Enter Teacher Name",
-    Software_Testing_QA_Marks: "Enter Teacher Name",
+    IP_TOT_Marks: "Prof. Kiran Babar",
+    CNS_TOT_Marks: "Prof. Pranoti Nage",
+    EEB_TOT_Marks: "Prof. Abhay Patil",
+    SE_TOT_Marks: "Prof. Pallavi Yaul",
+    ADSA_TOT_Marks: "Prof Snehal Bhure",
+    ADMT_TOT_Marks: "Prof. Renuka Nagpure",
   });
 
   useEffect(() => {
-    // Change /sem/8 to /sem/7 or whichever semester you are viewing
     fetch("http://localhost:5000/api/students/sem/5")
       .then((res) => res.json())
       .then((res) => setData(res))
@@ -76,22 +66,14 @@ const Sem5Analysis = () => {
   // Colors matching the Excel template
   const tableHeaderColor = "bg-[#9bc2e6]";
 
-  // Clean Subject Names Mapping
+  // Short clean names so they perfectly fit on the X-Axis horizontally
   const cleanSubjectNames = {
-    Blockchain_DLT_Marks: "BC & DLT",
-    Big_Data_Marks: "BDA",
-    Knowledge_Mgmt_Marks: "KM",
-    ERP_Marks: "ERP",
-    Project_Mgmt_Marks: "PM",
-    AI_DS_II_Marks: "AI & DS II",
-    IoE_Marks: "IoE",
-    Data_Science_Lab_Marks: "DS Lab",
-    Major_Project_I_Marks: "Major Project I",
-    Mgmt_Info_Sys_Marks: "MIS",
-    Infra_Security_Marks: "Infra Security",
-    Info_Retrieval_Sys_Marks: "IRS",
-    Cyber_Security_Laws_Marks: "CSL",
-    Software_Testing_QA_Marks: "STQA",
+    IP_TOT_Marks: "IP",
+    CNS_TOT_Marks: "CNS",
+    EEB_TOT_Marks: "EEB",
+    SE_TOT_Marks: "SE",
+    ADSA_TOT_Marks: "ADSA",
+    ADMT_TOT_Marks: "ADMT",
   };
 
   // Format data for Recharts
@@ -111,27 +93,49 @@ const Sem5Analysis = () => {
   };
 
   return (
-    <div className="max-w-5xl mx-auto p-10 bg-white text-black min-h-screen font-sans border-4 border-blue-900 m-8 shadow-2xl print:m-0 print:border-none print:shadow-none print:p-0">
+    <div className="max-w-5xl mx-auto p-10 bg-white text-black min-h-screen font-sans border-4 border-blue-900 m-8 shadow-2xl print:m-0 print:border-none print:shadow-none print:p-8">
+      {/* THIS STYLE BLOCK HIDES THE BROWSER URL AND DATE ON PRINT */}
+      <style>
+        {`
+          @media print {
+            @page { margin: 0mm; }
+          }
+        `}
+      </style>
+
+      {/* PDF EXPORT BUTTON */}
+      <div className="flex justify-end mb-6 print:hidden">
+        <button
+          onClick={() => window.print()}
+          className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-6 rounded-lg shadow-md transition-all flex items-center gap-2"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="h-5 w-5"
+            viewBox="0 0 20 20"
+            fill="currentColor"
+          >
+            <path
+              fillRule="evenodd"
+              d="M5 4v3H4a2 2 0 00-2 2v3a2 2 0 002 2h1v2a2 2 0 002 2h6a2 2 0 002-2v-2h1a2 2 0 002-2V9a2 2 0 00-2-2h-1V4a2 2 0 00-2-2H7a2 2 0 00-2 2zm8 0H7v3h6V4zm0 8H7v4h6v-4z"
+              clipRule="evenodd"
+            />
+          </svg>
+          Save as PDF
+        </button>
+      </div>
+
       {/* ========================================== */}
       {/* 1. REPORT HEADER */}
       {/* ========================================== */}
       <div className="text-center mb-8 leading-tight">
-        {/* <h3 className="text-lg tracking-widest text-gray-700 mb-1">
-          MANJARA CHARITABLE TRUST
-        </h3>
-        <h1 className="text-3xl font-extrabold uppercase tracking-wide mb-2 text-gray-900">
-          Rajiv Gandhi Institute of Technology, Mumbai
-        </h1>
-        <h2 className="text-2xl font-bold underline decoration-2 underline-offset-4 mb-6 text-gray-800">
-          Department of Information Technology
-        </h2> */}
         <img
           src="IT New logo.png"
           alt="IT New logo"
-          className="align-middle mb-4  object-contain mx-auto"
+          className="align-middle mb-4 object-contain mx-auto"
         />
         <h3 className="text-xl font-bold text-gray-900">
-          RESULT ANALYSIS T.E. SEMESTER {analysis.semester}
+          RESULT ANALYSIS T.E. SEMESTER V
         </h3>
         <p className="text-lg font-medium mt-1">Academic Year 2025-26</p>
       </div>
@@ -209,6 +213,9 @@ const Sem5Analysis = () => {
           </tbody>
         </table>
       </div>
+      {/* ========================================== */}
+      {/* 6. FOOTER STATISTICS & MALE/FEMALE TABLE */}
+      {/* ========================================== */}
       <div className="flex justify-between items-end mb-20 max-w-4xl mx-auto print:break-inside-avoid print:mt-16">
         <div className="font-bold text-base leading-relaxed tracking-wide text-gray-900">
           <p>TOTAL NO. OF STUDENTS :- {analysis.overall.totalStudents}</p>
@@ -263,7 +270,6 @@ const Sem5Analysis = () => {
           </tbody>
         </table>
       </div>
-
       {/* ========================================== */}
       {/* 7. SIGNATURES */}
       {/* ========================================== */}
@@ -277,34 +283,24 @@ const Sem5Analysis = () => {
           <p>HOD</p>
         </div>
       </div>
-      <br />
-      <br />
-      <br />
-      <hr className="border-0 h-[1px] bg-black my-4" />
-      <div className="text-center mb-8 leading-tight">
-        {/* <h3 className="text-lg tracking-widest text-gray-700 mb-1">
-          MANJARA CHARITABLE TRUST
-        </h3>
-        <h1 className="text-3xl font-extrabold uppercase tracking-wide mb-2 text-gray-900">
-          Rajiv Gandhi Institute of Technology, Mumbai
-        </h1>
-        <h2 className="text-2xl font-bold underline decoration-2 underline-offset-4 mb-6 text-gray-800">
-          Department of Information Technology
-        </h2> */}
+
+      <hr className="border-0 h-[1px] bg-black my-4 print:hidden" />
+      <div className="text-center mb-8 leading-tight print:break-before-page print:pt-4">
         <img
           src="IT New logo.png"
           alt="IT New logo"
-          className="align-middle mb-4  object-contain mx-auto"
+          className="align-middle mb-4 object-contain mx-auto"
         />
         <h3 className="text-xl font-bold text-gray-900">
-          RESULT ANALYSIS T.E. SEMESTER {analysis.semester}
+          RESULT ANALYSIS T.E. SEMESTER V
         </h3>
         <p className="text-lg font-medium mt-1">Academic Year 2025-26</p>
       </div>
+
       {/* ========================================== */}
       {/* 4. RESULT SUMMARY TABLE (WITH EDITABLE TEACHERS) */}
       {/* ========================================== */}
-      <div className="mb-14 flex flex-col items-center print:break-before-page">
+      <div className="mb-14 flex flex-col items-center">
         <h4 className="text-xl font-semibold underline decoration-1 underline-offset-4 mb-3 uppercase tracking-wider">
           Result Summary
         </h4>
@@ -342,8 +338,6 @@ const Sem5Analysis = () => {
                   <td className="border border-black p-2 font-bold">
                     {displayName}
                   </td>
-
-                  {/* EDITABLE TEACHER FIELD */}
                   <td className="border border-black p-0 text-left relative">
                     <input
                       type="text"
@@ -351,11 +345,10 @@ const Sem5Analysis = () => {
                       onChange={(e) =>
                         handleTeacherChange(sub.subject, e.target.value)
                       }
-                      className="w-full h-full px-3 py-2 bg-transparent focus:outline-none focus:bg-yellow-50 font-medium text-gray-900 transition-colors placeholder-gray-400"
+                      className="w-full h-full px-3 py-2 bg-transparent focus:outline-none focus:bg-yellow-50 font-medium text-gray-900 transition-colors placeholder-gray-400 print:placeholder-transparent"
                       placeholder="Click to type name..."
                     />
                   </td>
-
                   <td className="border border-black p-2 font-semibold">
                     {sub.appeared}
                   </td>
@@ -386,7 +379,7 @@ const Sem5Analysis = () => {
       {/* ========================================== */}
       <div className="flex flex-col items-center gap-16 mb-16 print:mt-10">
         {/* Chart 1 */}
-        <div className="w-full max-w-4xl border-l-[20px] border-b-[20px] border-[#4f81bd] p-8 relative bg-white shadow-md print:border-l-[10px] print:border-b-[10px] print:shadow-none">
+        <div className="w-full max-w-4xl border-l-[20px] border-b-[20px] border-[#4f81bd] p-8 relative bg-white shadow-md print:border-l-[10px] print:border-b-[10px] print:shadow-none print:break-inside-avoid">
           <h4 className="text-center font-bold text-xl mb-6 text-gray-800">
             Result Analysis
           </h4>
@@ -396,7 +389,7 @@ const Sem5Analysis = () => {
           <div className="absolute -bottom-12 left-1/2 -translate-x-1/2 font-bold text-gray-700 tracking-widest uppercase text-xs print:text-black">
             Name of Subject
           </div>
-          <ResponsiveContainer width="100%" height={350}>
+          <ResponsiveContainer width="100%" height={300}>
             <BarChart
               data={chartData}
               margin={{ top: 20, right: 30, left: 0, bottom: 5 }}
@@ -405,27 +398,32 @@ const Sem5Analysis = () => {
               <XAxis
                 dataKey="name"
                 interval={0}
-                tick={{ fontWeight: "bold", fontSize: 9 }}
+                tick={{ fontWeight: "bold", fontSize: 13 }}
               />
-              <YAxis tick={{ fontWeight: "bold" }} />
+              <YAxis
+                tick={{ fontWeight: "bold", fontSize: 12 }}
+                tickCount={5}
+                allowDecimals={false}
+                domain={[0, "dataMax + 5"]}
+              />
               <Tooltip cursor={{ fill: "#f4f4f4" }} />
               <Legend
-                verticalAlign="middle"
+                verticalAlign="top"
                 align="right"
                 layout="vertical"
-                wrapperStyle={{ paddingLeft: "20px", fontWeight: "bold" }}
+                wrapperStyle={{ paddingBottom: "20px", fontWeight: "bold" }}
               />
               <Bar
                 dataKey="appeared"
                 fill="#4f81bd"
                 name="Total no of Students Appeared"
-                barSize={25}
+                barSize={30}
               />
               <Bar
                 dataKey="passed"
                 fill="#c0504d"
                 name="Total No of Students Passed"
-                barSize={25}
+                barSize={30}
               />
             </BarChart>
           </ResponsiveContainer>
@@ -442,7 +440,7 @@ const Sem5Analysis = () => {
           <div className="absolute -bottom-12 left-1/2 -translate-x-1/2 font-bold text-gray-700 tracking-widest uppercase text-xs print:text-black">
             Name of Subject
           </div>
-          <ResponsiveContainer width="100%" height={350}>
+          <ResponsiveContainer width="100%" height={300}>
             <BarChart
               data={chartData}
               margin={{ top: 20, right: 30, left: 0, bottom: 5 }}
@@ -451,15 +449,20 @@ const Sem5Analysis = () => {
               <XAxis
                 dataKey="name"
                 interval={0}
-                tick={{ fontWeight: "bold", fontSize: 11 }}
+                tick={{ fontWeight: "bold", fontSize: 13 }}
               />
-              <YAxis tick={{ fontWeight: "bold" }} />
+              <YAxis
+                tick={{ fontWeight: "bold", fontSize: 12 }}
+                tickCount={5}
+                allowDecimals={false}
+                domain={[0, "dataMax + 5"]}
+              />
               <Tooltip cursor={{ fill: "#f4f4f4" }} />
               <Legend
-                verticalAlign="middle"
+                verticalAlign="top"
                 align="right"
                 layout="vertical"
-                wrapperStyle={{ paddingLeft: "20px", fontWeight: "bold" }}
+                wrapperStyle={{ paddingBottom: "20px", fontWeight: "bold" }}
               />
               <Bar
                 dataKey="marks40to50"
@@ -483,10 +486,6 @@ const Sem5Analysis = () => {
           </ResponsiveContainer>
         </div>
       </div>
-
-      {/* ========================================== */}
-      {/* 6. FOOTER STATISTICS & MALE/FEMALE TABLE */}
-      {/* ========================================== */}
     </div>
   );
 };

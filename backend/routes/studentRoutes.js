@@ -18,6 +18,8 @@ const {
   getSem5Students,
   getSem6Students,
   getSem7Students,
+  uploadCsvDataSem3,
+  uploadCsvDataSem4,
   uploadCsvDataSem5,
   getSemAnalysis,
   analyzeSem3CsvDirectly,
@@ -32,6 +34,8 @@ const upload = multer({ storage: multer.memoryStorage() });
 // File Upload Routes
 router.post("/upload-master", upload.single("file"), uploadMasterCsv);
 router.post("/upload-csv-sem5", upload.single("file"), uploadCsvDataSem5);
+router.post("/upload-csv-sem3", upload.single("file"), uploadCsvDataSem3);
+router.post("/upload-csv-sem4", upload.single("file"), uploadCsvDataSem4);
 router.post("/upload-csv", upload.single("file"), uploadCsvData);
 router.post("/upload-atkt-csv", upload.single("file"), uploadAtktCsvData);
 router.post("/upload-nep-pdf", upload.single("file"), uploadNepPdfData);

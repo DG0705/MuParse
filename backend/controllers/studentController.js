@@ -168,7 +168,541 @@ const uploadNepPdfData = async (req, res) => {
     res.status(500).json({ error: `Server error: ${error.message}` });
   }
 };
-const CollegeStudentDetails = require("../models/CollegeStudentDetails");
+
+const CollegeStudentDetails = require("../models/CollegeStudentDetails"); // FIX: Imported missing baseline model
+
+const SHORT_NAMES = {
+  "ENGINEERING MATHEMATICS - III": "EM3",
+  "DATA STRUCTURE AND ANALYSIS": "DSA",
+  "DATABASE MANAGEMENT SYSTEM": "DBMS",
+  "PRINCIPLE OF COMMUNICATION": "PC",
+  "PARADIGMS AND COMPUTER PROGRAMMING FUNDAMENTALS": "PCPF",
+  "DATA STRUCTURE LAB": "DSA LAB",
+  "SQL LAB": "SQL LAB",
+  "COMPUTER PROGRAMMING PARADIGMS LAB": "CPP LAB",
+  "JAVA LAB (SBL)": "JAVA LAB",
+  "MINI PROJECT - 1A FOR FRONT END / BACKEND APPLICATION USING JAVA":
+    "MINI PROJ 1A",
+};
+
+const uploadCsvDataSem3 = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: "Upload a CSV file." });
+    }
+
+    const csvString = req.file.buffer.toString();
+
+    // Parse without headers
+    const { data } = Papa.parse(csvString, {
+      header: false,
+      skipEmptyLines: false,
+    });
+
+    const semNum = 3;
+    const formattedData = [];
+    let headerRowIdx = -1;
+    let subHeaderRowIdx = -1;
+
+    for (let i = 0; i < Math.min(20, data.length); i++) {
+      const firstCell = data[i][0] ? data[i][0].toString() : "";
+      if (firstCell.includes("Courses")) headerRowIdx = i;
+      if (firstCell.includes("Seat No")) subHeaderRowIdx = i;
+    }
+
+    if (headerRowIdx === -1 || subHeaderRowIdx === -1) {
+      return res.status(400).json({
+        message: "Invalid CSV format. Could not find Course Headers.",
+      });
+    }
+
+    const subjectNamesRowIdx = headerRowIdx + 1;
+    const totalIdx = data[headerRowIdx].findIndex(
+      (val) => val && val.toString().toUpperCase().includes("TOTAL"),
+    );
+    const sgpiIdx = data[headerRowIdx].findIndex(
+      (val) => val && val.toString().toUpperCase().includes("SGPI"),
+    );
+    const resultIdx = data[headerRowIdx].findIndex(
+      (val) => val && val.toString().toUpperCase().includes("RESULT"),
+    );
+
+    for (let i = 0; i < data.length; i++) {
+      const col0 = data[i][0] ? data[i][0].toString().trim() : "";
+      const col1 = data[i][1] ? data[i][1].toString().trim() : "";
+
+      // Safe matching for numbers (ignores Excel ".0" corruption)
+      if (col0.match(/^\d+(\.0)?$/) && col1 === "MarksO") {
+        const marksRow = data[i];
+        const nameRow = data[i + 1] || [];
+
+        const cleanSeatNo = col0.replace(/\.0$/, "").replace(/[^0-9]/g, "");
+
+        const studentObj = {
+          "Seat No": cleanSeatNo,
+          Name: nameRow[0] ? nameRow[0].toString().trim() : "",
+          "Total Marks": marksRow[totalIdx]
+            ? marksRow[totalIdx].toString().trim()
+            : "0",
+          SGPI: marksRow[sgpiIdx] ? marksRow[sgpiIdx].toString().trim() : "0",
+          Result: marksRow[resultIdx]
+            ? marksRow[resultIdx].toString().trim()
+            : "N/A",
+        };
+
+        let currentCourse = "";
+        for (let c = 2; c < totalIdx; c++) {
+          let courseCell = data[subjectNamesRowIdx][c];
+          if (!courseCell || courseCell.toString().trim() === "") {
+            courseCell = data[headerRowIdx][c];
+          }
+          if (courseCell && courseCell.toString().trim() !== "") {
+            currentCourse = courseCell.toString().trim();
+          }
+
+          const markCategory = data[subHeaderRowIdx][c]
+            ? data[subHeaderRowIdx][c].toString().trim()
+            : "";
+
+          if (currentCourse && markCategory) {
+            const upperSub = currentCourse.toUpperCase();
+            const shortName =
+              SHORT_NAMES[upperSub] || upperSub.substring(0, 15);
+            const safeShortName = shortName
+              .replace(/[^a-zA-Z0-9]/g, "_")
+              .replace(/_+/g, "_");
+
+            const markHead = `${safeShortName}_${markCategory}_Marks`;
+            const gradeHead = `${safeShortName}_${markCategory}_Grade`;
+
+            const markValue = marksRow[c]
+              ? marksRow[c]
+                  .toString()
+                  .replace(/[EF\*\!]/g, "")
+                  .trim()
+              : "";
+            const gradeValue = nameRow[c] ? nameRow[c].toString().trim() : "";
+
+            studentObj[markHead] = markValue;
+            if (gradeValue) studentObj[gradeHead] = gradeValue;
+          }
+        }
+        formattedData.push(studentObj);
+      }
+    }
+
+    const masterOps = [];
+    const academicOps = [];
+    const collegeUpdateOps = [];
+
+    // ==========================================
+    // THE FIX: Track claimed PRNs to prevent overwrites
+    // ==========================================
+    const claimedPRNs = new Set();
+
+    for (const s of formattedData) {
+      const cleanSeatNo = s["Seat No"];
+      if (!cleanSeatNo) continue;
+
+      let rawName = (s["Name"] || "").trim();
+      let extractedGender = "Male";
+      if (rawName.startsWith("/")) {
+        extractedGender = "Female";
+        rawName = rawName.substring(1).trim();
+      }
+      s["Name"] = rawName;
+
+      let extractedMotherName = "Unknown";
+      const nameParts = rawName.split(/\s+/);
+      if (nameParts.length > 2)
+        extractedMotherName = nameParts[nameParts.length - 1];
+
+      let finalPRN = null;
+      let csvName = rawName.replace(/[.,\-()]/g, " ");
+      const nameWords = csvName.split(/\s+/).filter((w) => w.trim().length > 1);
+
+      if (nameWords.length > 0) {
+        const escapeRegExp = (string) =>
+          string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const primaryWords = nameWords.slice(0, 2);
+
+        const searchConditions = primaryWords.map((word) => ({
+          name: { $regex: "\\b" + escapeRegExp(word) + "\\b", $options: "i" },
+        }));
+
+        let matchedStudents = await CollegeStudentDetails.find({
+          $and: searchConditions,
+        });
+
+        // PRN Assignment Check 1
+        if (matchedStudents.length === 1) {
+          const possiblePRN = matchedStudents[0].prn
+            .toString()
+            .replace(/[^0-9]/g, "");
+          if (!claimedPRNs.has(possiblePRN)) {
+            finalPRN = possiblePRN;
+          }
+        }
+        // PRN Assignment Check 2 (Fallback)
+        else if (matchedStudents.length === 0 && primaryWords.length > 0) {
+          const fallbackMatches = await CollegeStudentDetails.find({
+            name: {
+              $regex: "\\b" + escapeRegExp(primaryWords[0]) + "\\b",
+              $options: "i",
+            },
+          });
+          if (fallbackMatches.length === 1) {
+            const possiblePRN = fallbackMatches[0].prn
+              .toString()
+              .replace(/[^0-9]/g, "");
+            if (!claimedPRNs.has(possiblePRN)) {
+              finalPRN = possiblePRN;
+            }
+          }
+        }
+      }
+
+      // If PRN wasn't found (or was already claimed), safely assign unique TEMP
+      finalPRN = finalPRN || `TEMP_${cleanSeatNo}`;
+      claimedPRNs.add(finalPRN); // MARK PRN AS CLAIMED FOR THIS UPLOAD BATCH
+      s.finalPRN = finalPRN;
+
+      const flatSubjects = {};
+      const excludedKeys = [
+        "seat no",
+        "name",
+        "result",
+        "sgpi",
+        "total marks",
+        "finalprn",
+      ];
+      Object.keys(s).forEach((key) => {
+        if (!excludedKeys.includes(key.toLowerCase().trim()))
+          flatSubjects[key] = s[key];
+      });
+
+      masterOps.push({
+        updateOne: {
+          filter: { prn: finalPRN },
+          update: {
+            $set: { gender: extractedGender },
+            $setOnInsert: {
+              name: rawName || "Unknown",
+              motherName: extractedMotherName,
+            },
+          },
+          upsert: true,
+        },
+      });
+
+      academicOps.push({
+        updateOne: {
+          filter: { prn: finalPRN, semester: semNum },
+          update: {
+            $set: {
+              seatNo: cleanSeatNo,
+              sgpi: s["SGPI"],
+              totalMarks: s["Total Marks"],
+              finalResult: s["Result"],
+              subjects: flatSubjects,
+            },
+          },
+          upsert: true,
+        },
+      });
+
+      collegeUpdateOps.push({
+        updateOne: {
+          filter: { prn: finalPRN },
+          update: { $set: { Sem3: true } },
+        },
+      });
+    }
+
+    if (masterOps.length > 0) await StudentMaster.bulkWrite(masterOps);
+    if (academicOps.length > 0) await AcademicRecord.bulkWrite(academicOps);
+    if (collegeUpdateOps.length > 0)
+      await CollegeStudentDetails.bulkWrite(collegeUpdateOps);
+
+    res.status(200).json({
+      success: true,
+      message: `Semester 3 CSV Processed. Successfully saved all ${formattedData.length} records without overwrites.`,
+      students: formattedData.map((s) => ({
+        seat_no: s["Seat No"],
+        name: s["Name"],
+        prn: s.finalPRN,
+        result: s["Result"],
+        sgpi: s["SGPI"],
+      })),
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// --- Semester 4 Dynamic Dictionary Mapping ---
+const SHORT_NAMES_SEM4 = {
+  "ENGINEERING MATHEMATICS - IV": "EM4",
+  "COMPUTER NETWORK AND NETWORK DESIGN": "CNND",
+  "OPERATING SYSTEM": "OS",
+  "AUTOMATA THEORY": "AT",
+  "COMPUTER ORGANIZATION AND ARCHITECTURE": "COA",
+  "NETWORK LAB": "NET LAB",
+  "UNIX LAB": "UNIX LAB",
+  "MICROPROCESSOR LAB": "MICRO LAB",
+  "PYTHON LAB (SBL)": "PYTHON LAB",
+  "MINI PROJECT - 1 B FOR PYTHON BASED AUTOMATION PROJECTS": "MINI PROJ 1B",
+};
+
+const uploadCsvDataSem4 = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: "Upload a CSV file." });
+    }
+
+    const csvString = req.file.buffer.toString();
+    const { data } = Papa.parse(csvString, {
+      header: false,
+      skipEmptyLines: false,
+    });
+
+    const semNum = 4;
+    const formattedData = [];
+    let headerRowIdx = -1;
+    let subHeaderRowIdx = -1;
+
+    for (let i = 0; i < Math.min(20, data.length); i++) {
+      const firstCell = data[i][0] ? data[i][0].toString() : "";
+      if (firstCell.includes("Courses")) headerRowIdx = i;
+      if (firstCell.includes("Seat No")) subHeaderRowIdx = i;
+    }
+
+    if (headerRowIdx === -1 || subHeaderRowIdx === -1) {
+      return res
+        .status(400)
+        .json({
+          message: "Invalid CSV format. Could not find Course Headers.",
+        });
+    }
+
+    const subjectNamesRowIdx = headerRowIdx + 1;
+    const totalIdx = data[headerRowIdx].findIndex(
+      (val) => val && val.toString().toUpperCase().includes("TOTAL"),
+    );
+    const sgpiIdx = data[headerRowIdx].findIndex(
+      (val) => val && val.toString().toUpperCase().includes("SGPI"),
+    );
+    const resultIdx = data[headerRowIdx].findIndex(
+      (val) => val && val.toString().toUpperCase().includes("RESULT"),
+    );
+
+    for (let i = 0; i < data.length; i++) {
+      const col0 = data[i][0] ? data[i][0].toString().trim() : "";
+      const col1 = data[i][1] ? data[i][1].toString().trim() : "";
+
+      if (col0.match(/^\d+(\.0)?$/) && col1 === "MarksO") {
+        const marksRow = data[i];
+        const nameRow = data[i + 1] || [];
+
+        const cleanSeatNo = col0.replace(/\.0$/, "").replace(/[^0-9]/g, "");
+
+        const studentObj = {
+          "Seat No": cleanSeatNo,
+          Name: nameRow[0] ? nameRow[0].toString().trim() : "",
+          "Total Marks": marksRow[totalIdx]
+            ? marksRow[totalIdx].toString().trim()
+            : "0",
+          SGPI: marksRow[sgpiIdx] ? marksRow[sgpiIdx].toString().trim() : "0",
+          Result: marksRow[resultIdx]
+            ? marksRow[resultIdx].toString().trim()
+            : "N/A",
+        };
+
+        let currentCourse = "";
+        for (let c = 2; c < totalIdx; c++) {
+          let courseCell = data[subjectNamesRowIdx][c];
+          if (!courseCell || courseCell.toString().trim() === "") {
+            courseCell = data[headerRowIdx][c];
+          }
+          if (courseCell && courseCell.toString().trim() !== "") {
+            currentCourse = courseCell.toString().trim();
+          }
+
+          const markCategory = data[subHeaderRowIdx][c]
+            ? data[subHeaderRowIdx][c].toString().trim()
+            : "";
+
+          if (currentCourse && markCategory) {
+            const upperSub = currentCourse.toUpperCase();
+            const shortName =
+              SHORT_NAMES_SEM4[upperSub] || upperSub.substring(0, 15);
+            const safeShortName = shortName
+              .replace(/[^a-zA-Z0-9]/g, "_")
+              .replace(/_+/g, "_");
+
+            const markHead = `${safeShortName}_${markCategory}_Marks`;
+            const gradeHead = `${safeShortName}_${markCategory}_Grade`;
+
+            const markValue = marksRow[c]
+              ? marksRow[c]
+                  .toString()
+                  .replace(/[EF\*\!]/g, "")
+                  .trim()
+              : "";
+            const gradeValue = nameRow[c] ? nameRow[c].toString().trim() : "";
+
+            studentObj[markHead] = markValue;
+            if (gradeValue) studentObj[gradeHead] = gradeValue;
+          }
+        }
+        formattedData.push(studentObj);
+      }
+    }
+
+    const masterOps = [];
+    const academicOps = [];
+    const collegeUpdateOps = [];
+
+    const claimedPRNs = new Set();
+
+    for (const s of formattedData) {
+      const cleanSeatNo = s["Seat No"];
+      if (!cleanSeatNo) continue;
+
+      let rawName = (s["Name"] || "").trim();
+      let extractedGender = "Male";
+      if (rawName.startsWith("/")) {
+        extractedGender = "Female";
+        rawName = rawName.substring(1).trim();
+      }
+      s["Name"] = rawName;
+
+      let extractedMotherName = "Unknown";
+      const nameParts = rawName.split(/\s+/);
+      if (nameParts.length > 2)
+        extractedMotherName = nameParts[nameParts.length - 1];
+
+      let finalPRN = null;
+      let csvName = rawName.replace(/[.,\-()]/g, " ");
+      const nameWords = csvName.split(/\s+/).filter((w) => w.trim().length > 1);
+
+      if (nameWords.length > 0) {
+        const escapeRegExp = (string) =>
+          string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const primaryWords = nameWords.slice(0, 2);
+
+        const searchConditions = primaryWords.map((word) => ({
+          name: { $regex: "\\b" + escapeRegExp(word) + "\\b", $options: "i" },
+        }));
+
+        let matchedStudents = await CollegeStudentDetails.find({
+          $and: searchConditions,
+        });
+
+        if (matchedStudents.length === 1) {
+          const possiblePRN = matchedStudents[0].prn
+            .toString()
+            .replace(/[^0-9]/g, "");
+          if (!claimedPRNs.has(possiblePRN)) {
+            finalPRN = possiblePRN;
+          }
+        } else if (matchedStudents.length === 0 && primaryWords.length > 0) {
+          const fallbackMatches = await CollegeStudentDetails.find({
+            name: {
+              $regex: "\\b" + escapeRegExp(primaryWords[0]) + "\\b",
+              $options: "i",
+            },
+          });
+          if (fallbackMatches.length === 1) {
+            const possiblePRN = fallbackMatches[0].prn
+              .toString()
+              .replace(/[^0-9]/g, "");
+            if (!claimedPRNs.has(possiblePRN)) {
+              finalPRN = possiblePRN;
+            }
+          }
+        }
+      }
+
+      finalPRN = finalPRN || `TEMP_${cleanSeatNo}`;
+      claimedPRNs.add(finalPRN);
+      s.finalPRN = finalPRN;
+
+      const flatSubjects = {};
+      const excludedKeys = [
+        "seat no",
+        "name",
+        "result",
+        "sgpi",
+        "total marks",
+        "finalprn",
+      ];
+      Object.keys(s).forEach((key) => {
+        if (!excludedKeys.includes(key.toLowerCase().trim()))
+          flatSubjects[key] = s[key];
+      });
+
+      masterOps.push({
+        updateOne: {
+          filter: { prn: finalPRN },
+          update: {
+            $set: { gender: extractedGender },
+            $setOnInsert: {
+              name: rawName || "Unknown",
+              motherName: extractedMotherName,
+            },
+          },
+          upsert: true,
+        },
+      });
+
+      academicOps.push({
+        updateOne: {
+          filter: { prn: finalPRN, semester: semNum },
+          update: {
+            $set: {
+              seatNo: cleanSeatNo,
+              sgpi: s["SGPI"],
+              totalMarks: s["Total Marks"],
+              finalResult: s["Result"],
+              subjects: flatSubjects,
+            },
+          },
+          upsert: true,
+        },
+      });
+
+      // Target Sem4 specifically in the dashboard flags model
+      collegeUpdateOps.push({
+        updateOne: {
+          filter: { prn: finalPRN },
+          update: { $set: { Sem4: true } },
+        },
+      });
+    }
+
+    if (masterOps.length > 0) await StudentMaster.bulkWrite(masterOps);
+    if (academicOps.length > 0) await AcademicRecord.bulkWrite(academicOps);
+    if (collegeUpdateOps.length > 0)
+      await CollegeStudentDetails.bulkWrite(collegeUpdateOps);
+
+    res.status(200).json({
+      success: true,
+      message: `Semester 4 CSV Processed. Successfully saved all ${formattedData.length} records.`,
+      students: formattedData.map((s) => ({
+        seat_no: s["Seat No"],
+        name: s["Name"],
+        prn: s.finalPRN,
+        result: s["Result"],
+        sgpi: s["SGPI"],
+      })),
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// DON'T FORGET TO EXPORT uploadCsvDataSem4 at the bottom of studentController.js!
 
 const uploadCsvDataSem5 = async (req, res) => {
   try {
@@ -1749,6 +2283,147 @@ const analyzeSem3CsvDirectly = async (req, res) => {
   }
 };
 
+// const uploadCsvDataSem3 = async (req, res) => {
+//   try {
+//     if (!req.file)
+//       return res.status(400).json({ message: "Upload a CSV file." });
+
+//     const csvString = req.file.buffer.toString();
+//     const { data } = Papa.parse(csvString, {
+//       header: true,
+//       skipEmptyLines: true,
+//     });
+
+//     const semNum = Number(req.body.semester) || 3;
+//     const masterOps = [];
+//     const academicOps = [];
+
+//     for (const s of data) {
+//       const seatKey = Object.keys(s).find(
+//         (k) => k.trim() === "Seat No" || k.trim() === "Seat_No",
+//       );
+//       const cleanSeatNo = (seatKey ? s[seatKey] : "")
+//         .toString()
+//         .replace(/[^0-9]/g, "");
+//       let rawPRN = (s["PRN"] || "").toString().replace(/[^0-9]/g, "");
+
+//       if (!cleanSeatNo) continue;
+
+//       // --- PRN LOOKUP LOGIC ---
+//       let finalPRN = rawPRN;
+//       if (!finalPRN) {
+//         let csvName = s["Name"] || s["name"];
+//         if (csvName) {
+//           csvName = csvName.replace(/[\/.,\-()]/g, " ");
+//           const nameWords = csvName
+//             .split(/\s+/)
+//             .filter((w) => w.trim().length > 1);
+
+//           if (nameWords.length > 0) {
+//             const escapeRegExp = (string) =>
+//               string.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+//             const primaryWords = nameWords.slice(0, 2);
+//             const searchConditions = primaryWords.map((word) => ({
+//               name: {
+//                 $regex: "\\b" + escapeRegExp(word) + "\\b",
+//                 $options: "i",
+//               },
+//             }));
+
+//             let matchedStudents = await CollegeStudentDetail.find({
+//               $and: searchConditions,
+//             });
+
+//             if (matchedStudents.length === 1) {
+//               finalPRN = matchedStudents[0].prn
+//                 .toString()
+//                 .replace(/[^0-9]/g, "");
+//             } else if (
+//               matchedStudents.length === 0 &&
+//               primaryWords.length > 0
+//             ) {
+//               const fallbackMatches = await CollegeStudentDetail.find({
+//                 name: {
+//                   $regex: "\\b" + escapeRegExp(primaryWords[0]) + "\\b",
+//                   $options: "i",
+//                 },
+//               });
+//               if (fallbackMatches.length === 1) {
+//                 finalPRN = fallbackMatches[0].prn
+//                   .toString()
+//                   .replace(/[^0-9]/g, "");
+//               }
+//             }
+//           }
+//         }
+//       }
+//       finalPRN = finalPRN || `TEMP_${cleanSeatNo}`;
+//       // ------------------------
+
+//       const extractedSGPI = s["SGPI"] || s["SGPA"] || "0";
+//       const extractedTotal = s["Grand_Total"] || s["Total Marks"] || "0";
+//       const extractedResult = s["Result"] || s["Final Result"] || "N/A";
+//       const flatSubjects = {};
+//       const excludedKeys = [
+//         "seat no",
+//         "seat_no",
+//         "prn",
+//         "name",
+//         "gender",
+//         "result",
+//         "final result",
+//         "sgpi",
+//         "sgpa",
+//         "grand_total",
+//         "total marks",
+//         "remark",
+//       ];
+
+//       Object.keys(s).forEach((key) => {
+//         if (!excludedKeys.includes(key.toLowerCase().trim())) {
+//           flatSubjects[key] = s[key];
+//         }
+//       });
+
+//       masterOps.push({
+//         updateOne: {
+//           filter: { prn: finalPRN },
+//           update: {
+//             $set: { gender: s["Gender"] || "" },
+//             $setOnInsert: { name: s["Name"] || "Unknown" },
+//           },
+//           upsert: true,
+//         },
+//       });
+
+//       academicOps.push({
+//         updateOne: {
+//           filter: { prn: finalPRN, semester: semNum },
+//           update: {
+//             $set: {
+//               seatNo: cleanSeatNo,
+//               sgpi: extractedSGPI,
+//               totalMarks: extractedTotal,
+//               finalResult: extractedResult,
+//               subjects: flatSubjects,
+//             },
+//           },
+//           upsert: true,
+//         },
+//       });
+//     }
+
+//     if (masterOps.length > 0) await StudentMaster.bulkWrite(masterOps);
+//     if (academicOps.length > 0) await AcademicRecord.bulkWrite(academicOps);
+
+//     res
+//       .status(200)
+//       .json({ success: true, message: `CSV Processed for Semester ${semNum}` });
+//   } catch (error) {
+//     res.status(500).json({ error: error.message });
+//   }
+// };
+
 // const getSem7Analysis = async (req, res) => {
 //   try {
 //     const semNum = Number(req.params.sem);
@@ -1880,6 +2555,8 @@ const analyzeSem3CsvDirectly = async (req, res) => {
 module.exports = {
   uploadCsvData,
   uploadCsvDataSem5,
+  uploadCsvDataSem3,
+  uploadCsvDataSem4,
   uploadNepPdfData,
   uploadAtktCsvData,
   getStudents,

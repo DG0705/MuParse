@@ -36,10 +36,9 @@ const NepAnalysisSem3 = () => {
     setError(null);
 
     const formData = new FormData();
-    formData.append("file", file); // Must match backend 'upload.single("file")'
+    formData.append("file", file);
 
     try {
-      // UPDATE THIS URL to match the new backend route you created above
       const response = await fetch(
         "http://localhost:5000/api/students/analyze-sem3-csv",
         {
@@ -57,7 +56,7 @@ const NepAnalysisSem3 = () => {
     setLoading(false);
   };
 
-  // UPLOAD SCREEN (Shows if data hasn't been generated yet)
+  // UPLOAD SCREEN
   if (!data) {
     return (
       <div className="flex flex-col justify-center items-center h-screen bg-gray-50 p-6">
@@ -90,7 +89,34 @@ const NepAnalysisSem3 = () => {
     );
   }
 
-  // REPORT SCREEN (Renders exactly like before once data is received)
+  // SAFETY NET
+  if (!data.analysis) {
+    return (
+      <div className="flex flex-col justify-center items-center h-screen bg-gray-50 p-6">
+        <div className="bg-white p-10 rounded-2xl shadow-xl max-w-2xl w-full border-2 border-red-200 text-center">
+          <h2 className="text-2xl font-extrabold text-red-600 mb-4">
+            Oops! Missing Analysis Data
+          </h2>
+          <p className="text-gray-700 font-medium mb-6">
+            The CSV uploaded successfully, but your Node.js backend did not send
+            back the{" "}
+            <code className="bg-gray-100 text-red-500 px-2 py-1 rounded">
+              analysis
+            </code>{" "}
+            object required to draw the charts.
+          </p>
+          <button
+            onClick={() => setData(null)}
+            className="bg-gray-800 hover:bg-gray-900 text-white font-bold py-2 px-6 rounded-lg transition-all shadow-md"
+          >
+            ← Go Back and Try Again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // REPORT SCREEN
   const { analysis } = data;
   const tableHeaderColor = "bg-[#9bc2e6]";
 
@@ -114,25 +140,50 @@ const NepAnalysisSem3 = () => {
   const genderStats = analysis.overall.gender;
 
   return (
-    <div className="max-w-5xl mx-auto p-10 bg-white text-black min-h-screen font-sans border-4 border-blue-900 m-8 shadow-2xl print:m-0 print:border-none print:shadow-none print:p-0">
+    // Note: Changed print:p-0 to print:p-8 so it doesn't touch the edge of the paper
+    <div className="max-w-5xl mx-auto p-10 bg-white text-black min-h-screen font-sans border-4 border-blue-900 m-8 shadow-2xl print:m-0 print:border-none print:shadow-none print:p-8">
+      {/* THIS STYLE BLOCK HIDES THE BROWSER URL AND DATE ON PRINT */}
+      <style>
+        {`
+          @media print {
+            @page {
+              margin: 0mm; /* Removes the browser's default headers and footers */
+            }
+          }
+        `}
+      </style>
+
+      {/* PDF EXPORT BUTTON */}
+      <div className="flex justify-end mb-6 print:hidden">
+        <button
+          onClick={() => window.print()}
+          className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-6 rounded-lg shadow-md transition-all flex items-center gap-2"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="h-5 w-5"
+            viewBox="0 0 20 20"
+            fill="currentColor"
+          >
+            <path
+              fillRule="evenodd"
+              d="M5 4v3H4a2 2 0 00-2 2v3a2 2 0 002 2h1v2a2 2 0 002 2h6a2 2 0 002-2v-2h1a2 2 0 002-2V9a2 2 0 00-2-2h-1V4a2 2 0 00-2-2H7a2 2 0 00-2 2zm8 0H7v3h6V4zm0 8H7v4h6v-4z"
+              clipRule="evenodd"
+            />
+          </svg>
+          Save as PDF
+        </button>
+      </div>
+
       {/* 1. REPORT HEADER */}
       <div className="text-center mb-8 leading-tight">
-        {/* <h3 className="text-lg tracking-widest text-gray-700 mb-1">
-          MANJARA CHARITABLE TRUST
-        </h3>
-        <h1 className="text-3xl font-extrabold uppercase tracking-wide mb-2 text-gray-900">
-          Rajiv Gandhi Institute of Technology, Mumbai
-        </h1>
-        <h2 className="text-2xl font-bold underline decoration-2 underline-offset-4 mb-6 text-gray-800">
-          Department of Information Technology
-        </h2> */}
         <img
           src="IT New logo.png"
           alt="IT New logo"
-          className="align-middle mb-4  object-contain mx-auto"
+          className="align-middle mb-4 object-contain mx-auto"
         />
         <h3 className="text-xl font-bold text-gray-900">
-          RESULT ANALYSIS S.E. SEMESTER {analysis.semester}
+          RESULT ANALYSIS S.E. SEMESTER III
         </h3>
         <p className="text-lg font-medium mt-1">Academic Year 2025-26</p>
       </div>
@@ -147,7 +198,7 @@ const NepAnalysisSem3 = () => {
             <tr className={`${tableHeaderColor} text-sm`}>
               <th className="border border-black p-2 w-24">RANK</th>
               <th className="border border-black p-2">NAME OF THE STUDENT</th>
-              <th className="border border-black p-2 w-32">TOTAL (800)</th>
+              <th className="border border-black p-2 w-32">CGPA</th>
             </tr>
           </thead>
           <tbody>
@@ -205,29 +256,23 @@ const NepAnalysisSem3 = () => {
           </tbody>
         </table>
       </div>
-      <hr className="border-0 h-[1px] bg-black my-4" />
-      <div className="text-center mb-8 leading-tight">
-        {/* <h3 className="text-lg tracking-widest text-gray-700 mb-1">
-          MANJARA CHARITABLE TRUST
-        </h3>
-        <h1 className="text-3xl font-extrabold uppercase tracking-wide mb-2 text-gray-900">
-          Rajiv Gandhi Institute of Technology, Mumbai
-        </h1>
-        <h2 className="text-2xl font-bold underline decoration-2 underline-offset-4 mb-6 text-gray-800">
-          Department of Information Technology
-        </h2> */}
+
+      <hr className="border-0 h-[1px] bg-black my-4 print:hidden" />
+
+      <div className="text-center mb-8 leading-tight print:break-before-page print:pt-4">
         <img
           src="IT New logo.png"
           alt="IT New logo"
-          className="align-middle mb-4  object-contain mx-auto"
+          className="align-middle mb-4 object-contain mx-auto"
         />
         <h3 className="text-xl font-bold text-gray-900">
-          RESULT ANALYSIS S.E. SEMESTER {analysis.semester}
+          RESULT ANALYSIS S.E. SEMESTER III
         </h3>
         <p className="text-lg font-medium mt-1">Academic Year 2025-26</p>
       </div>
+
       {/* 4. RESULT SUMMARY TABLE */}
-      <div className="mb-14 flex flex-col items-center print:break-before-page">
+      <div className="mb-14 flex flex-col items-center">
         <h4 className="text-xl font-semibold underline decoration-1 underline-offset-4 mb-3 uppercase tracking-wider">
           Result Summary
         </h4>
@@ -271,7 +316,7 @@ const NepAnalysisSem3 = () => {
                       onChange={(e) =>
                         handleTeacherChange(sub.subject, e.target.value)
                       }
-                      className="w-full h-full px-3 py-2 bg-transparent focus:outline-none focus:bg-yellow-50 font-medium text-gray-900 transition-colors placeholder-gray-400"
+                      className="w-full h-full px-3 py-2 bg-transparent focus:outline-none focus:bg-yellow-50 font-medium text-gray-900 transition-colors placeholder-gray-400 print:placeholder-transparent"
                       placeholder="Click to type name..."
                     />
                   </td>
@@ -302,7 +347,7 @@ const NepAnalysisSem3 = () => {
 
       {/* 5. CHARTS SECTION */}
       <div className="flex flex-col items-center gap-16 mb-16 print:mt-10">
-        <div className="w-full max-w-4xl border-l-[20px] border-b-[20px] border-[#4f81bd] p-8 relative bg-white shadow-md print:border-l-[10px] print:border-b-[10px] print:shadow-none">
+        <div className="w-full max-w-4xl border-l-[20px] border-b-[20px] border-[#4f81bd] p-8 relative bg-white shadow-md print:border-l-[10px] print:border-b-[10px] print:shadow-none print:break-inside-avoid">
           <h4 className="text-center font-bold text-xl mb-6 text-gray-800">
             Result Analysis
           </h4>
@@ -312,24 +357,27 @@ const NepAnalysisSem3 = () => {
           <div className="absolute -bottom-12 left-1/2 -translate-x-1/2 font-bold text-gray-700 tracking-widest uppercase text-xs print:text-black">
             Name of Subject
           </div>
-          <ResponsiveContainer width="100%" height={350}>
+          <ResponsiveContainer width="100%" height={380}>
             <BarChart
               data={chartData}
-              margin={{ top: 20, right: 30, left: 0, bottom: 5 }}
+              margin={{ top: 20, right: 30, left: 0, bottom: 20 }}
             >
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
               <XAxis
                 dataKey="name"
                 interval={0}
-                tick={{ fontWeight: "bold", fontSize: 12 }}
+                // angle={-45}
+                textAnchor="end"
+                height={80}
+                tick={{ fontWeight: "bold", fontSize: 11 }}
               />
               <YAxis tick={{ fontWeight: "bold" }} />
               <Tooltip cursor={{ fill: "#f4f4f4" }} />
               <Legend
-                verticalAlign="middle"
+                verticalAlign="top"
                 align="right"
-                layout="vertical"
-                wrapperStyle={{ paddingLeft: "20px", fontWeight: "bold" }}
+                layout="horizontal"
+                wrapperStyle={{ paddingBottom: "20px", fontWeight: "bold" }}
               />
               <Bar
                 dataKey="appeared"
@@ -357,24 +405,32 @@ const NepAnalysisSem3 = () => {
           <div className="absolute -bottom-12 left-1/2 -translate-x-1/2 font-bold text-gray-700 tracking-widest uppercase text-xs print:text-black">
             Name of Subject
           </div>
-          <ResponsiveContainer width="100%" height={350}>
+          <ResponsiveContainer width="100%" height={380}>
             <BarChart
               data={chartData}
-              margin={{ top: 20, right: 30, left: 0, bottom: 5 }}
+              margin={{ top: 20, right: 30, left: 0, bottom: 20 }}
             >
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
               <XAxis
                 dataKey="name"
                 interval={0}
-                tick={{ fontWeight: "bold", fontSize: 12 }}
+                // angle={-45}
+                textAnchor="end"
+                height={80}
+                tick={{ fontWeight: "bold", fontSize: 11 }}
               />
-              <YAxis tick={{ fontWeight: "bold" }} />
+              <YAxis
+                tick={{ fontWeight: "bold", fontSize: 12 }}
+                tickCount={5}
+                allowDecimals={false}
+                domain={[0, "dataMax + 5"]}
+              />
               <Tooltip cursor={{ fill: "#f4f4f4" }} />
               <Legend
-                verticalAlign="middle"
+                verticalAlign="top"
                 align="right"
-                layout="vertical"
-                wrapperStyle={{ paddingLeft: "20px", fontWeight: "bold" }}
+                layout="horizontal"
+                wrapperStyle={{ paddingBottom: "20px", fontWeight: "bold" }}
               />
               <Bar
                 dataKey="marks40to50"
@@ -410,34 +466,32 @@ const NepAnalysisSem3 = () => {
           <thead>
             <tr>
               <th className="border border-black p-2 bg-white w-48"></th>
-              <th className="border border-black p-2 px-6 bg-gray-50">Male</th>
               <th className="border border-black p-2 px-6 bg-gray-50">
-                Female
+                No Of Students
               </th>
+              {/* <th className="border border-black p-2 px-6 bg-gray-50">
+                Female
+              </th> */}
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td className="border border-black p-2 text-left px-3">
-                Total No Students Passed
-              </td>
+              <td className="border border-black p-2 text-left px-3">Passed</td>
               <td className="border border-black p-2">
                 {genderStats.male.passed}
               </td>
-              <td className="border border-black p-2">
+              {/* <td className="border border-black p-2">
                 {genderStats.female.passed}
-              </td>
+              </td> */}
             </tr>
             <tr>
-              <td className="border border-black p-2 text-left px-3">
-                Total No Students Failed
-              </td>
+              <td className="border border-black p-2 text-left px-3">Failed</td>
               <td className="border border-black p-2">
                 {genderStats.male.failed}
               </td>
-              <td className="border border-black p-2">
+              {/* <td className="border border-black p-2">
                 {genderStats.female.failed}
-              </td>
+              </td> */}
             </tr>
             <tr className="bg-gray-100">
               <td className="border border-black p-2 text-left px-3 uppercase">
@@ -446,9 +500,9 @@ const NepAnalysisSem3 = () => {
               <td className="border border-black p-2 text-lg">
                 {genderStats.male.total}
               </td>
-              <td className="border border-black p-2 text-lg">
+              {/* <td className="border border-black p-2 text-lg">
                 {genderStats.female.total}
-              </td>
+              </td> */}
             </tr>
           </tbody>
         </table>
@@ -457,7 +511,7 @@ const NepAnalysisSem3 = () => {
       {/* 7. SIGNATURES */}
       <div className="flex justify-between items-center px-4 pt-10 mt-10 font-bold text-base max-w-4xl mx-auto text-gray-900 print:break-inside-avoid">
         <div className="text-center">
-          <p>Dr. Anushree Deshmukh</p>
+          <p>Dr. Swati Narwane</p>
           <p>Result Committee Convener</p>
         </div>
         <div className="text-center">
