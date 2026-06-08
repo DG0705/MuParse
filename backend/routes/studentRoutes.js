@@ -23,12 +23,9 @@ const {
   uploadCsvDataSem5,
   getSemAnalysis,
   analyzeSem3CsvDirectly,
-  // getSem7Analysis,
 } = require("../controllers/studentController");
 
-// const { getStudentMLInsights } = require("../controllers/mlController");
-const { getBatchAnalytics } = require("../controllers/analyticsController.js");
-const analyticsController = require("../controllers/analyticsController"); // Adjust path if needed
+const analyticsController = require("../controllers/analyticsController"); 
 const upload = multer({ storage: multer.memoryStorage() });
 
 // File Upload Routes
@@ -41,7 +38,6 @@ router.post("/upload-atkt-csv", upload.single("file"), uploadAtktCsvData);
 router.post("/upload-nep-pdf", upload.single("file"), uploadNepPdfData);
 router.get("/sem/:sem", getSemAnalysis);
 router.post("/analyze-sem3-csv", upload.single("file"), analyzeSem3CsvDirectly);
-// router.get("/sem7/:sem", getSem7Analysis);
 
 // Utility Routes
 router.post("/merge", mergeStudents);
@@ -51,10 +47,13 @@ router.get("/sem2", getSem2Students);
 router.get("/sem3", getSem3Students);
 router.get("/sem4", getSem4Students);
 router.get("/sem5", getSem5Students);
-router.get("/sem6", getSem6Students); // <-- Typo fixed here
+router.get("/sem6", getSem6Students); 
 router.get("/sem7", getSem7Students);
 router.get("/history/:prn", getStudentHistory);
 router.get("/batch/:batch", getStudentsByBatch);
+
+// Analytics Routes
+router.get("/analytics/semester-batch", analyticsController.getSemesterAnalysisBatchWise);
 router.get("/analytics/golden", analyticsController.getGoldenStudents);
 router.get("/analytics/golden1", analyticsController.getGoldenStudents1);
 
