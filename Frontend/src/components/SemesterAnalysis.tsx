@@ -471,7 +471,7 @@ const SemesterAnalysis: React.FC<SemesterAnalysisProps> = ({ semesterNumber, rep
         marks40_50: studentsWithMarks.filter((s) => { const m = cleanAndParseInt(s[markKey]); return m >= 40 && m <= 50; }).length,
         marks51_59: studentsWithMarks.filter((s) => { const m = cleanAndParseInt(s[markKey]); return m >= 51 && m <= 59; }).length,
         marks60_Above: studentsWithMarks.filter((s) => cleanAndParseInt(s[markKey]) >= 60).length,
-        teacher: "XYZ (Click to Edit)", // Default editable teacher name
+        teacher: "--- (Click to Edit)", // Default editable teacher name
       };
 
       if (studentsWithMarks.length > 0) {
@@ -522,7 +522,7 @@ const SemesterAnalysis: React.FC<SemesterAnalysisProps> = ({ semesterNumber, rep
             onChange={(e) => setSelectedYear(e.target.value)}
             className="border border-gray-300 rounded px-3 py-1 outline-none focus:ring-2 focus:ring-blue-500"
           >
-            <option value="">All Batches</option>
+            <option value="">Select Batch</option>
             <option value="2021">2021</option>
             <option value="2022">2022</option>
             <option value="2023">2023</option>

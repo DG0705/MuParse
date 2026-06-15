@@ -1,8 +1,8 @@
 import React from 'react';
 import SemesterAnalysis from './SemesterAnalysis';
 
-const Sem8Analysis: React.FC = () => {
-  return <SemesterAnalysis semesterNumber={8} reportTitle="B.E. Semester VIII Result Analysis" />;
+const Sem6Analysis: React.FC = () => {
+  return <SemesterAnalysis semesterNumber={6} reportTitle="B.E. Semester VI Result Analysis" />;
 };
 
-export default Sem8Analysis;
+export default Sem6Analysis;
