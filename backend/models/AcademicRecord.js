@@ -9,10 +9,10 @@ const academicRecordSchema = new mongoose.Schema(
     totalMarks: { type: String, default: "0" },
     finalResult: { type: String, default: "Unsuccessful" },
     isKT: { type: Boolean, default: false },
-    isNEP: { type: Boolean, default: false }, // Crucial for data isolation
+    // isNEP: { type: Boolean, default: false }, // Crucial for data isolation
     subjects: { type: Map, of: mongoose.Schema.Types.Mixed },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 academicRecordSchema.index({ prn: 1, semester: 1 }, { unique: true });

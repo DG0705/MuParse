@@ -14,12 +14,12 @@ import Year4 from "./components/Year4";
 
 import Sem1Converter from "./components/Sem1Converter";
 import Sem2Converter from "./components/Sem2Converter";
-import Sem7Converter from "./components/Sem7Converter1";
+import { Sem7Converter } from "./components/Sem7Converter1";
 import Sem8Converter from "./components/Sem8Converter";
-import Sem3Converter from "./components/Sem3Converter";
-import Sem4Converter from "./components/Sem4Converter";
-import Sem5Converter from "./components/Sem5Converter";
-import Sem6Converter from "./components/Sem6Converter";
+import { Sem3Converter } from "./components/Sem3Converter";
+import { Sem4Converter } from "./components/Sem4Converter";
+import { Sem5Converter } from "./components/Sem5Converter";
+import { Sem6Converter } from "./components/Sem6Converter";
 import Sem8Analysis from "./components/Sem8Analysis";
 import Sem1Analysis from "./components/Sem1Analysis";
 import Sem2Analysis from "./components/Sem2Analysis";

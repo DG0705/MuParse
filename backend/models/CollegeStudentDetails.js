@@ -12,6 +12,8 @@ const CollegeStudentDetailsSchema = new mongoose.Schema(
     Sem6: { type: Boolean, default: false },
     Sem7: { type: Boolean, default: false },
     Sem8: { type: Boolean, default: false },
+    batch: { type: String, default: "" },
+    isDiploma: { type: Boolean, default: false },
   },
   { timestamps: true },
 );
