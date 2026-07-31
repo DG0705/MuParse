@@ -430,34 +430,6 @@ const uploadCsvDataSem3 = async (req, res) => {
       });
     }
 
-    // --- THE TERMINAL SNITCH ---
-    console.log(
-      "\n=================== SEM 3 UPLOAD DIAGNOSTIC ===================",
-    );
-    console.log(`1. Total raw lines read by PapaParse: ${data.length}`);
-    console.log(
-      `2. Valid student rows structured from CSV: ${formattedData.length}`,
-    );
-    console.log(
-      `3. Total students sitting inside Master DB: ${baselineStudents.length}`,
-    );
-    console.log(
-      `4. Successfully matched to PRNs (Passed Iron Gate): ${academicOps.length}`,
-    );
-    if (formattedData.length > 0 && academicOps.length === 0) {
-      console.log(
-        "\n⚠️ IRON GATE BLOCK: CSV student names completely failed to match DB names!",
-      );
-      console.log("Sample CSV Name parsed:", formattedData[0]?.Name);
-      console.log(
-        "Sample Master DB Name sitting in Mongo:",
-        baselineStudents[0]?.name,
-      );
-    }
-    console.log(
-      "===============================================================\n",
-    );
-
     if (masterOps.length > 0) await StudentMaster.bulkWrite(masterOps);
     if (academicOps.length > 0) await AcademicRecord.bulkWrite(academicOps);
     if (collegeUpdateOps.length > 0)
@@ -1146,7 +1118,7 @@ const uploadCsvData = async (req, res) => {
 
       // Controller 2: Update Sem Boolean (Guaranteed Hit!)
       // NOTE: Using standard camelCase "sem1", "sem2". Check your Mongoose schema!
-      const semKey = `sem${semNum}`;
+      const semKey = `Sem${semNum}`;
       collegeUpdateOps.push({
         updateOne: {
           filter: { prn: resolvedPRN },

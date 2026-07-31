@@ -35,54 +35,80 @@ const extractSem2 = async (buffer) => {
         const isFemale = rawName.startsWith("/");
 
         const subjectsMap = {};
+
+        const SUBJECT_MAP = {
+          1: "Eng_Maths_II",
+          2: "Eng_Maths_II_TW",
+          3: "Eng_Physics_II",
+          4: "Eng_Physics_II_TW",
+          5: "Eng_Chem_II",
+          6: "Eng_Chem_II_TW",
+          7: "Eng_Graphics",
+          8: "Eng_Graphics_TW",
+          9: "C_Prog",
+          10: "C_Programming_TW",
+          11: "Prof_Comm_Ethics_I",
+          12: "Prof_Comm_Ethics_I_TW",
+          13: "Workshop_II",
+        };
+
+        let totalCR = 0;
+        let totalCxG = 0;
+
         for (let i = 1; i <= 13; i++) {
           let mark = "";
-          if (i <= 5) mark = lines[11 + (i - 1) * 3];
-          else if (i <= 11) mark = lines[58 + (i - 6) * 3];
-          else if (i === 12) mark = lines[108];
-          else if (i === 13) mark = lines[111];
+          let cr = 0;
+          let gr = "";
+          let gp = 0;
+          let cxG = 0;
 
-          let cr, gr, gp, cxG, code;
           if (i <= 5) {
-            code = lines[i + 1];
+            mark = lines[11 + (i - 1) * 3];
+
             const base = 27 + (i - 1) * 4;
-            [cr, gr, gp, cxG] = [
-              lines[base],
-              lines[base + 1],
-              lines[base + 2],
-              lines[base + 3],
-            ];
+            cr = Number(lines[base]) || 0;
+            gr = lines[base + 1] || "";
+            gp = Number(lines[base + 2]) || 0;
+            cxG = Number(lines[base + 3]) || 0;
           } else if (i <= 11) {
-            code = lines[50 + (i - 6)];
+            mark = lines[58 + (i - 6) * 3];
+
             const base = 80 + (i - 6) * 4;
-            [cr, gr, gp, cxG] = [
-              lines[base],
-              lines[base + 1],
-              lines[base + 2],
-              lines[base + 3],
-            ];
+            cr = Number(lines[base]) || 0;
+            gr = lines[base + 1] || "";
+            gp = Number(lines[base + 2]) || 0;
+            cxG = Number(lines[base + 3]) || 0;
           } else if (i === 12) {
-            code = lines[104];
-            [cr, gr, gp, cxG] = [
-              lines[112],
-              lines[113],
-              lines[114],
-              lines[115],
-            ];
+            mark = lines[108];
+
+            cr = Number(lines[112]) || 0;
+            gr = lines[113] || "";
+            gp = Number(lines[114]) || 0;
+            cxG = Number(lines[115]) || 0;
           } else if (i === 13) {
-            code = lines[105];
+            mark = lines[111];
+
+            // Workshop-II has only marks in the PDF
+            cr = 1;
+            gr = "";
+            gp = 0;
+            cxG = 0;
           }
 
-          subjectsMap[`paper${i}code`] = code || "";
-          subjectsMap[`paper${i}marks`] = mark || "0";
+          const key = SUBJECT_MAP[i];
 
-          if (i !== 13) {
-            subjectsMap[`paper${i}cr`] = cr || "0";
-            subjectsMap[`paper${i}gr`] = gr || "";
-            subjectsMap[`paper${i}gp`] = gp || "0";
-            subjectsMap[`paper${i}cxG`] = cxG || "0";
-          }
+          subjectsMap[`${key}_CR`] = cr;
+          subjectsMap[`${key}_GR`] = gr;
+          subjectsMap[`${key}_GP`] = gp;
+          subjectsMap[`${key}_CxG`] = cxG;
+          subjectsMap[`${key}_Marks`] = Number(mark) || 0;
+
+          totalCR += cr;
+          totalCxG += cxG;
         }
+
+        subjectsMap["Total_CR"] = totalCR;
+        subjectsMap["Total_CxG"] = totalCxG;
 
         return {
           studentMaster: {

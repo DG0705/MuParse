@@ -14,7 +14,7 @@ import Year4 from "./components/Year4";
 
 import Sem1Converter from "./components/Sem1Converter";
 import Sem2Converter from "./components/Sem2Converter";
-import { Sem7Converter } from "./components/Sem7Converter1";
+import { Sem7Converter } from "./components/Sem7Converter";
 import Sem8Converter from "./components/Sem8Converter";
 import { Sem3Converter } from "./components/Sem3Converter";
 import { Sem4Converter } from "./components/Sem4Converter";

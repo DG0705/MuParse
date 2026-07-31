@@ -58,17 +58,33 @@ const extractSem1 = async (buffer) => {
           { id: 11, code: 55, marks: [71, 72, 73], meta: 100 },
         ];
 
+        const SUBJECT_MAP = {
+          1: "Eng_Maths_I",
+          2: "Eng_Maths_I_TW",
+          3: "Eng_Physics_I",
+          4: "Eng_Physics_I_TW",
+          5: "Eng_Chem_I",
+          6: "Eng_Chem_I_TW",
+          7: "Eng_Mechanics",
+          8: "Eng_Mechanics_TW",
+          9: "Basic_Elec_Eng",
+          10: "Basic_Elec_Eng_TW",
+          11: "Workshop_I",
+        };
+
         paperMapping.forEach((p) => {
-          subjectsMap[`paper${p.id}code`] = lines[p.code] || "";
-          // For Semester 1, we take the last mark in the marks array as the "Total"
-          subjectsMap[`paper${p.id}marks`] =
-            lines[p.marks[p.marks.length - 1]] || "0";
-          subjectsMap[`paper${p.id}cr`] = lines[p.meta] || "0";
-          subjectsMap[`paper${p.id}gr`] = lines[p.meta + 1] || "";
-          subjectsMap[`paper${p.id}gp`] = lines[p.meta + 2] || "0";
-          subjectsMap[`paper${p.id}cxG`] = lines[p.meta + 3] || "0";
+          const name = SUBJECT_MAP[p.id];
+
+          subjectsMap[`${name}_CR`] = Number(lines[p.meta]) || 0;
+          subjectsMap[`${name}_GR`] = lines[p.meta + 1] || "";
+          subjectsMap[`${name}_GP`] = Number(lines[p.meta + 2]) || 0;
+          subjectsMap[`${name}_CxG`] = Number(lines[p.meta + 3]) || 0;
+          subjectsMap[`${name}_Marks`] =
+            Number(lines[p.marks[p.marks.length - 1]]) || 0;
         });
 
+        subjectsMap["Total_CR"] = 18;
+        subjectsMap["Total_CxG"] = Number(lines[46]) || 0; // verify this index
         return {
           studentMaster: {
             prn: prnValue,
